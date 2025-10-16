@@ -10,12 +10,3 @@ export const HealthStatusSchema = z.object({
 
 // TypeScript Types
 export type HealthStatus = z.infer<typeof HealthStatusSchema>;
-
-export interface HealthCheckRequest {}
-
-export interface HealthCheckResponse {
-  status: string;
-  timestamp: string;
-  database: string;
-  error?: string;
-}

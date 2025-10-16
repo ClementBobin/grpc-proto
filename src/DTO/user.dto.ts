@@ -1,23 +1,21 @@
 import { z } from 'zod';
 
 // Zod Schemas
-export const UserSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  email: z.string().email(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
-
 export const CreateUserSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
 });
 
 export const UpdateUserSchema = z.object({
-  id: z.string(),
   name: z.string().min(1).optional(),
   email: z.string().email().optional(),
+  id: z.string(),
+});
+
+export const UserSchema = CreateUserSchema.extend({
+  id: z.string(),
+  createdAt: z.string().datetime().nullable(),
+  updatedAt: z.string().datetime().nullable(),
 });
 
 // TypeScript Types

@@ -1,12 +1,11 @@
 import { InfraService } from '@/BL/infra.service';
-import { HealthStatusSchema } from '@/DTO/infra.dto';
+import { HealthStatusSchema, type HealthStatus } from '@/DTO/infra.dto';
 import type { grpc } from '@/lib/grpc';
-import type { HealthCheckRequest, HealthCheckResponse } from '@/DTO/infra.dto';
 
 export const infraServiceImplementation = {
   healthCheck: async (
-    call: grpc.ServerUnaryCall<HealthCheckRequest, HealthCheckResponse>,
-    callback: grpc.sendUnaryData<HealthCheckResponse>
+    call: grpc.ServerUnaryCall<HealthStatus, HealthStatus>,
+    callback: grpc.sendUnaryData<HealthStatus>
   ) => {
     try {
       const healthStatus = await InfraService.healthCheck();
@@ -14,7 +13,7 @@ export const infraServiceImplementation = {
       // Validate with Zod
       const validatedStatus = HealthStatusSchema.parse(healthStatus);
       
-      const response: HealthCheckResponse = {
+      const response: HealthStatus = {
         status: validatedStatus.status,
         timestamp: validatedStatus.timestamp,
         database: validatedStatus.database,

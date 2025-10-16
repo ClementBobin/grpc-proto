@@ -1,59 +1,49 @@
 import type { User, CreateUserInput, UpdateUserInput } from '@/DTO/user.dto';
-
-// Mock data store (in production, this would use Prisma)
-const users: Map<string, User> = new Map();
-let idCounter = 1;
+import prisma from './prismaClient';
 
 export const UserRepository = {
   findById: async (id: string): Promise<User | null> => {
-    return users.get(id) || null;
+    return prisma.user.findUnique({ where: { id } });
   },
 
   findAll: async (page: number = 1, pageSize: number = 10): Promise<{ users: User[]; total: number }> => {
-    const allUsers = Array.from(users.values());
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    
+    const [users, total] = await prisma.$transaction([
+      prisma.user.findMany({
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.user.count(),
+    ]);
+
     return {
-      users: allUsers.slice(start, end),
-      total: allUsers.length,
+      users,
+      total,
     };
   },
 
   create: async (input: CreateUserInput): Promise<User> => {
-    const id = `user_${idCounter++}`;
-    const now = new Date().toISOString();
-    
-    const user: User = {
-      id,
+    const data = {
       name: input.name,
       email: input.email,
-      createdAt: now,
-      updatedAt: now,
     };
-    
-    users.set(id, user);
-    return user;
+
+    return prisma.user.create({ data });
   },
 
   update: async (input: UpdateUserInput): Promise<User | null> => {
-    const existingUser = users.get(input.id);
-    if (!existingUser) {
-      return null;
-    }
+    const existingUser = await prisma.user.findUnique({ where: { id: input.id } });
+    if (!existingUser) return null;
 
-    const updatedUser: User = {
-      ...existingUser,
-      name: input.name ?? existingUser.name,
-      email: input.email ?? existingUser.email,
-      updatedAt: new Date().toISOString(),
-    };
+    const data: Record<string, unknown> = {};
+    if (input.name !== undefined) data.name = input.name;
+    if (input.email !== undefined) data.email = input.email;
+    data.updatedAt = new Date().toISOString();
 
-    users.set(input.id, updatedUser);
-    return updatedUser;
+    return prisma.user.update({ where: { id: input.id }, data });
   },
 
   delete: async (id: string): Promise<boolean> => {
-    return users.delete(id);
+    const result = await prisma.user.delete({ where: { id } });
+    return !!result;
   },
 };

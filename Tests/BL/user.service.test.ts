@@ -1,8 +1,8 @@
-import { UserService } from '../src/BL/user.service';
-import { UserRepository } from '../src/DAL/user.repository';
+import { UserService } from '../../src/BL/user.service';
+import { UserRepository } from '../../src/DAL/user.repository';
 
 // Mock the repository
-jest.mock('../src/DAL/user.repository', () => ({
+jest.mock('../../src/DAL/user.repository', () => ({
   UserRepository: {
     findById: jest.fn(),
     findAll: jest.fn(),
@@ -13,10 +13,6 @@ jest.mock('../src/DAL/user.repository', () => ({
 }));
 
 describe('UserService', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
   describe('getUser', () => {
     it('should return user when found', async () => {
       const mockUser = {
@@ -54,8 +50,6 @@ describe('UserService', () => {
       const mockUser = {
         id: 'user_2',
         ...input,
-        createdAt: '2025-10-16T06:34:37.817Z',
-        updatedAt: '2025-10-16T06:34:37.817Z',
       };
 
       (UserRepository.create as jest.Mock).mockResolvedValue(mockUser);
@@ -75,11 +69,7 @@ describe('UserService', () => {
         email: 'john.updated@example.com',
       };
 
-      const mockUser = {
-        ...input,
-        createdAt: '2025-10-16T06:34:37.817Z',
-        updatedAt: '2025-10-16T07:00:00.000Z',
-      };
+      const mockUser = { ...input };
 
       (UserRepository.update as jest.Mock).mockResolvedValue(mockUser);
 

@@ -1,18 +1,14 @@
-import { InfraService } from '../src/BL/infra.service';
-import { InfraRepository } from '../src/DAL/infra.repository';
+import { InfraService } from '../../src/BL/infra.service';
+import { InfraRepository } from '../../src/DAL/infra.repository';
 
 // Mock the repository
-jest.mock('../src/DAL/infra.repository', () => ({
+jest.mock('../../src/DAL/infra.repository', () => ({
   InfraRepository: {
     getHealthStatus: jest.fn(),
   },
 }));
 
 describe('InfraService', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
   describe('healthCheck', () => {
     it('should return healthy status when repository returns healthy', async () => {
       const mockHealthStatus = {

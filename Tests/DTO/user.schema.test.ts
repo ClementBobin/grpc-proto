@@ -1,4 +1,4 @@
-import { UserSchema, CreateUserSchema, UpdateUserSchema } from '../src/DTO/user.dto';
+import { UserSchema, CreateUserSchema, UpdateUserSchema } from '../../src/DTO/user.dto';
 
 describe('User DTOs', () => {
   describe('UserSchema', () => {

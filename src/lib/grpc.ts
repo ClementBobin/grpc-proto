@@ -41,8 +41,7 @@ export class GrpcServer {
   addService(serviceDefinition: GrpcServiceDefinition): void {
     const protoPath = path.resolve(__dirname, '../../proto', serviceDefinition.protoPath);
     const proto = loadProtoFile(protoPath);
-    
-    // Navigate to the service definition
+
     const packageObj = proto[serviceDefinition.packageName] as any;
     const serviceObj = packageObj[serviceDefinition.serviceName];
 
@@ -65,14 +64,13 @@ export class GrpcServer {
       this.server.bindAsync(
         port,
         grpc.ServerCredentials.createInsecure(),
-        (error, port) => {
+        (error, actualPort) => {
           if (error) {
             reject(error);
             return;
           }
-          
-          this.server.start();
-          console.log(`\n🚀 gRPC Server started on ${port}`);
+
+          console.log(`\n🚀 gRPC Server started on ${actualPort}`);
           console.log(`Registered services: ${this.services.length}`);
           this.services.forEach(service => {
             console.log(`  - ${service.packageName}.${service.serviceName}`);
@@ -104,4 +102,16 @@ export class GrpcServer {
   }
 }
 
-export { grpc };
+// Handle graceful shutdown globally, outside the class
+function setupGracefulShutdown(server: GrpcServer): void {
+  const shutdown = async (signal: string) => {
+    console.log(`\nReceived ${signal}, shutting down gracefully...`);
+    await server.stop();
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+}
+
+export { grpc, setupGracefulShutdown };
