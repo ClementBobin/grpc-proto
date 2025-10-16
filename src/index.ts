@@ -1,5 +1,6 @@
-import { InfraService } from './BL/infra.service';
-import { HealthStatusSchema } from './schemas/health.schema';
+import 'module-alias/register';
+import { InfraService } from '@/BL/infra.service';
+import { HealthStatusSchema } from '@/DTO/infra.dto';
 
 async function main() {
   try {
