@@ -1,4 +1,3 @@
-import 'module-alias/register';
 import { GrpcServer } from '@/lib/grpc';
 import { infraServiceImplementation } from '@/grpc/infra.server';
 import { userServiceImplementation } from '@/grpc/user.server';

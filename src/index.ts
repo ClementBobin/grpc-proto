@@ -1,4 +1,3 @@
-import 'module-alias/register';
 import { InfraService } from '@/BL/infra.service';
 import { HealthStatusSchema } from '@/DTO/infra.dto';
 
