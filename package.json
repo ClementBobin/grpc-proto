@@ -6,7 +6,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
+    "start:server": "node dist/server.js",
+    "dev": "ts-node -r tsconfig-paths/register src/index.ts",
+    "dev:server": "ts-node -r tsconfig-paths/register src/server.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -19,16 +21,24 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/google-protobuf": "^3.15.12",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.7.2",
     "jest": "^30.2.0",
     "prisma": "^6.17.1",
     "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.0",
+    "@grpc/proto-loader": "^0.8.0",
     "@prisma/client": "^6.17.1",
+    "module-alias": "^2.2.3",
     "zod": "^4.1.12"
+  },
+  "_moduleAliases": {
+    "@": "dist"
   }
 }

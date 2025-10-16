@@ -1,4 +1,4 @@
-import { InfraRepository } from '../DAL/infra.repository';
+import { InfraRepository } from '@/DAL/infra.repository';
 
 export const InfraService = {
   healthCheck: async () => {

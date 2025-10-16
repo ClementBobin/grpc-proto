@@ -1,4 +1,4 @@
-import { HealthStatusSchema } from '../src/schemas/health.schema';
+import { HealthStatusSchema } from '../src/DTO/infra.dto';
 
 describe('HealthStatusSchema', () => {
   it('should validate a healthy status object', () => {
