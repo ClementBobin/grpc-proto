@@ -72,6 +72,20 @@ Key configuration options:
 
 See `.env.example` for all available options.
 
+#### Environment Variables Reference
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GRPC_PORT` | `0.0.0.0:50051` | gRPC server bind address and port |
+| `USE_TLS` | `false` | Enable TLS/HTTPS (`true`/`false`) |
+| `TLS_CERT_PATH` | `./server.crt` | Path to TLS certificate file |
+| `TLS_KEY_PATH` | `./server.key` | Path to TLS private key file |
+| `TLS_CA_PATH` | `./ca.crt` | Path to CA certificate (optional) |
+| `ENABLE_AUTH` | `true` | Enable authentication (`true`/`false`) |
+| `AUTH_LEVEL` | `endpoint` | Auth level (`global`/`service`/`endpoint`) |
+| `JWT_SECRET` | `super-secret` | Secret key for JWT signing |
+| `DATABASE_URL` | `file:./dev.db` | Database connection URL |
+
 ### Database Setup
 
 The project uses SQLite. Set the `DATABASE_URL` environment variable:
@@ -329,6 +343,8 @@ JWT tokens should contain at minimum:
 - `role`: User role (e.g., 'admin', 'user', 'guest')
 
 The role is used for RBAC checks when `allowedRoles` is specified.
+
+For detailed examples and use cases, see [EXAMPLES.md](./EXAMPLES.md).
 
 ## Development Guidelines
 
