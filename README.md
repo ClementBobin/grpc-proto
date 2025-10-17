@@ -5,6 +5,9 @@ A TypeScript gRPC microservice with Prisma, Zod validation, and comprehensive te
 ## Features
 
 - **gRPC**: High-performance RPC framework using @grpc/grpc-js and @grpc/proto-loader
+- **HTTP/HTTPS Support**: Configurable to run with or without TLS
+- **RBAC (Role-Based Access Control)**: Flexible authentication at global, service, or endpoint level
+- **JWT Authentication**: Secure token-based authentication with role verification
 - **Prisma ORM**: Database integration with SQLite
 - **Zod**: Schema validation for data integrity
 - **Jest**: Comprehensive testing framework
@@ -52,6 +55,23 @@ A TypeScript gRPC microservice with Prisma, Zod validation, and comprehensive te
 npm install
 ```
 
+### Configuration
+
+Copy the example environment file and configure as needed:
+
+```bash
+cp .env.example .env
+```
+
+Key configuration options:
+
+- **USE_TLS**: Set to `true` for HTTPS/TLS, `false` for HTTP (default: false)
+- **ENABLE_AUTH**: Set to `false` to disable authentication (default: true)
+- **AUTH_LEVEL**: Choose `global`, `service`, or `endpoint` (default: endpoint)
+- **JWT_SECRET**: Secret key for JWT token signing
+
+See `.env.example` for all available options.
+
 ### Database Setup
 
 The project uses SQLite. Set the `DATABASE_URL` environment variable:
@@ -70,15 +90,18 @@ npm run prisma:push
 
 **Build & Run:**
 - `npm run build` - Build the TypeScript project
-- `npm start` - Run the legacy health check application
-- `npm start:server` - Run the built gRPC server
-- `npm run dev` - Run health check in development mode
+- `npm start` - Run the gRPC server (production)
+- `npm run start:server` - Run the gRPC server (production)
+- `npm run start:client` - Run the legacy health check client (production)
+- `npm run dev` - Run gRPC server in development mode
 - `npm run dev:server` - Run gRPC server in development mode
+- `npm run dev:client` - Run legacy health check in development mode
 
 **Testing:**
 - `npm test` - Run all tests
 - `npm run test:watch` - Run tests in watch mode
 - `npm run test:coverage` - Run tests with coverage report
+- `npm run verify` - Build and test the project (recommended before commits)
 
 **Database:**
 - `npm run prisma:generate` - Generate Prisma client
@@ -87,18 +110,71 @@ npm run prisma:push
 
 ### Running the gRPC Server
 
-```bash
-# Development mode (with hot reload)
-npm run dev:server
+#### Running without TLS (HTTP mode - insecure)
 
-# Production mode
+```bash
+# Using environment variable
+USE_TLS=false npm run dev:server
+
+# Or set in .env file
+# USE_TLS=false
+npm run dev:server
+```
+
+#### Running with TLS (HTTPS mode - secure)
+
+First, generate SSL certificates (for development):
+
+```bash
+# Generate private key
+openssl genrsa -out server.key 2048
+
+# Generate certificate signing request
+openssl req -new -key server.key -out server.csr
+
+# Generate self-signed certificate
+openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt
+
+# Optional: Generate CA certificate
+openssl req -new -x509 -days 365 -key server.key -out ca.crt
+```
+
+Then start the server:
+
+```bash
+# Using environment variable
+USE_TLS=true npm run dev:server
+
+# Or set in .env file
+# USE_TLS=true
+npm run dev:server
+```
+
+#### Production mode
+
+```bash
 npm run build
 npm run start:server
 ```
 
-The server will start on `0.0.0.0:50051` and register the following services:
-- `infra.InfraService` - Infrastructure health check
-- `user.UserService` - User CRUD operations
+The server will start and display configuration:
+```
+Starting gRPC Server...
+Configuration:
+  - Port: 0.0.0.0:50051
+  - TLS: Disabled
+  - Auth: Enabled
+  - Auth Level: endpoint
+
+🚀 gRPC Server started on 50051
+   Protocol: gRPC insecure
+   Auth: Enabled
+   Auth Level: endpoint
+
+📋 Registered services:
+  - infra.InfraService
+  - user.UserService
+```
 
 ### Testing
 
@@ -140,7 +216,7 @@ Path aliases work in both development (via tsconfig-paths) and production (via m
 
 ### InfraService
 
-Health check service for monitoring application status:
+Health check service for monitoring application status (no authentication required):
 
 ```protobuf
 rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse);
@@ -148,7 +224,7 @@ rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse);
 
 ### UserService
 
-Complete user management CRUD service:
+Complete user management CRUD service with RBAC:
 
 ```protobuf
 rpc GetUser (GetUserRequest) returns (GetUserResponse);
@@ -157,6 +233,102 @@ rpc UpdateUser (UpdateUserRequest) returns (UpdateUserResponse);
 rpc DeleteUser (DeleteUserRequest) returns (DeleteUserResponse);
 rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);
 ```
+
+## Authentication & RBAC
+
+The server supports three levels of authentication configuration:
+
+### 1. Global Authentication
+
+All services and endpoints require authentication:
+
+```typescript
+// In server.ts
+const userServiceWithAuth = applyAuthMiddleware(userServiceImplementation, {
+  level: 'global',
+  globalRoles: ['admin', 'user'],
+});
+```
+
+Environment configuration:
+```bash
+AUTH_LEVEL=global
+ENABLE_AUTH=true
+```
+
+### 2. Service-Level Authentication
+
+Configure authentication per service:
+
+```typescript
+const userServiceWithAuth = applyAuthMiddleware(userServiceImplementation, {
+  level: 'service',
+  serviceConfig: {
+    enabled: true,
+    allowedRoles: ['admin', 'user'],
+  },
+});
+```
+
+Environment configuration:
+```bash
+AUTH_LEVEL=service
+ENABLE_AUTH=true
+```
+
+### 3. Endpoint-Level Authentication (Default)
+
+Configure authentication per endpoint for fine-grained control:
+
+```typescript
+const userServiceWithAuth = applyAuthMiddleware(userServiceImplementation, {
+  level: 'endpoint',
+  endpointConfig: {
+    createUser: { enabled: true, allowedRoles: ['admin'] },
+    updateUser: { enabled: true, allowedRoles: ['admin', 'user'] },
+    deleteUser: { enabled: true, allowedRoles: ['admin'] },
+    getUser: { enabled: true, allowedRoles: ['admin', 'user'] },
+    listUsers: { enabled: true, allowedRoles: ['admin', 'user'] },
+  },
+});
+```
+
+Environment configuration:
+```bash
+AUTH_LEVEL=endpoint
+ENABLE_AUTH=true
+```
+
+### Disabling Authentication
+
+To disable authentication entirely:
+
+```bash
+ENABLE_AUTH=false
+```
+
+### Using JWT Tokens
+
+To make authenticated requests, include a JWT token in the metadata:
+
+```javascript
+const metadata = new grpc.Metadata();
+const token = jwt.sign({ userId: '123', role: 'admin' }, JWT_SECRET);
+metadata.add('authorization', `Bearer ${token}`);
+
+// Make the gRPC call with metadata
+client.getUser({ id: '123' }, metadata, (err, response) => {
+  // Handle response
+});
+```
+
+### Token Structure
+
+JWT tokens should contain at minimum:
+- `userId`: User identifier
+- `role`: User role (e.g., 'admin', 'user', 'guest')
+
+The role is used for RBAC checks when `allowedRoles` is specified.
 
 ## Development Guidelines
 

@@ -1,7 +1,8 @@
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
-import creds from "./modules/tls.module"
+import { createTLSCredentials } from './modules/tls.module';
+import { loadServerConfig } from './config';
 
 export interface GrpcServiceDefinition {
   protoPath: string;
@@ -31,6 +32,7 @@ export function loadProtoFile(protoPath: string): grpc.GrpcObject {
 export class GrpcServer {
   private server: grpc.Server;
   private services: GrpcServiceDefinition[] = [];
+  private config = loadServerConfig();
 
   constructor() {
     this.server = new grpc.Server();
@@ -52,9 +54,6 @@ export class GrpcServer {
       );
     }
 
-    // Wrap the implementation with global auth middleware
-    //const securedImplementation = requireAuthForService(serviceDefinition.implementation);
-
     this.server.addService(serviceObj.service, serviceDefinition.implementation);
     this.services.push(serviceDefinition);
     console.log(`✓ Added service: ${serviceDefinition.packageName}.${serviceDefinition.serviceName}`);
@@ -63,14 +62,41 @@ export class GrpcServer {
   /**
    * Start the gRPC server
    */
-  async start(port: string = '0.0.0.0:50051', useTLS = false): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const serverCreds = useTLS ? creds : grpc.ServerCredentials.createInsecure();
+  async start(port?: string, useTLS?: boolean): Promise<void> {
+    const serverPort = port || this.config.port;
+    const enableTLS = useTLS !== undefined ? useTLS : this.config.useTLS;
 
-      this.server.bindAsync(port, serverCreds, (error, actualPort) => {
+    return new Promise((resolve, reject) => {
+      let serverCreds: grpc.ServerCredentials;
+
+      if (enableTLS) {
+        try {
+          serverCreds = createTLSCredentials(
+            this.config.certPath!,
+            this.config.keyPath!,
+            this.config.caPath
+          );
+          console.log('🔒 TLS enabled');
+        } catch (error) {
+          console.warn('⚠️  Failed to load TLS credentials, falling back to insecure mode');
+          console.warn('   Error:', error instanceof Error ? error.message : error);
+          serverCreds = grpc.ServerCredentials.createInsecure();
+        }
+      } else {
+        serverCreds = grpc.ServerCredentials.createInsecure();
+        console.log('🔓 Running in insecure mode (no TLS)');
+      }
+
+      this.server.bindAsync(serverPort, serverCreds, (error, actualPort) => {
         if (error) return reject(error);
 
-        console.log(`\n🚀 gRPC Server started on ${actualPort} (${useTLS ? 'TLS' : 'insecure'})`);
+        console.log(`\n🚀 gRPC Server started on ${actualPort}`);
+        console.log(`   Protocol: ${enableTLS ? 'gRPC with TLS' : 'gRPC insecure'}`);
+        console.log(`   Auth: ${this.config.enableAuth ? 'Enabled' : 'Disabled'}`);
+        if (this.config.enableAuth) {
+          console.log(`   Auth Level: ${this.config.authLevel}`);
+        }
+        console.log('\n📋 Registered services:');
         this.services.forEach(service => {
           console.log(`  - ${service.packageName}.${service.serviceName}`);
         });
