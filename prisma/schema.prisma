@@ -20,6 +20,7 @@ model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
+  role      String   @default("user")
   createdAt String   @default(dbgenerated("CURRENT_TIMESTAMP"))
   updatedAt String   @default(dbgenerated("CURRENT_TIMESTAMP"))
 }

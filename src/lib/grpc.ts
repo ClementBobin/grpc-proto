@@ -1,6 +1,7 @@
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
+import creds from "./modules/tls.module"
 
 export interface GrpcServiceDefinition {
   protoPath: string;
@@ -39,7 +40,7 @@ export class GrpcServer {
    * Add a gRPC service to the server
    */
   addService(serviceDefinition: GrpcServiceDefinition): void {
-    const protoPath = path.resolve(__dirname, '../../proto', serviceDefinition.protoPath);
+    const protoPath = path.resolve(__dirname, '../../protos', serviceDefinition.protoPath);
     const proto = loadProtoFile(protoPath);
 
     const packageObj = proto[serviceDefinition.packageName] as any;
@@ -51,6 +52,9 @@ export class GrpcServer {
       );
     }
 
+    // Wrap the implementation with global auth middleware
+    //const securedImplementation = requireAuthForService(serviceDefinition.implementation);
+
     this.server.addService(serviceObj.service, serviceDefinition.implementation);
     this.services.push(serviceDefinition);
     console.log(`✓ Added service: ${serviceDefinition.packageName}.${serviceDefinition.serviceName}`);
@@ -59,25 +63,19 @@ export class GrpcServer {
   /**
    * Start the gRPC server
    */
-  async start(port: string = '0.0.0.0:50051'): Promise<void> {
+  async start(port: string = '0.0.0.0:50051', useTLS = false): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.server.bindAsync(
-        port,
-        grpc.ServerCredentials.createInsecure(),
-        (error, actualPort) => {
-          if (error) {
-            reject(error);
-            return;
-          }
+      const serverCreds = useTLS ? creds : grpc.ServerCredentials.createInsecure();
 
-          console.log(`\n🚀 gRPC Server started on ${actualPort}`);
-          console.log(`Registered services: ${this.services.length}`);
-          this.services.forEach(service => {
-            console.log(`  - ${service.packageName}.${service.serviceName}`);
-          });
-          resolve();
-        }
-      );
+      this.server.bindAsync(port, serverCreds, (error, actualPort) => {
+        if (error) return reject(error);
+
+        console.log(`\n🚀 gRPC Server started on ${actualPort} (${useTLS ? 'TLS' : 'insecure'})`);
+        this.services.forEach(service => {
+          console.log(`  - ${service.packageName}.${service.serviceName}`);
+        });
+        resolve();
+      });
     });
   }
 
