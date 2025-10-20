@@ -13,6 +13,7 @@ export interface ServerConfig {
   serviceJwtSecret: string;
   enableAuth: boolean;
   authLevel: 'global' | 'service' | 'endpoint';
+  apiKeyExpirationDays: number;
 }
 
 export interface ServiceAuthConfig {
@@ -41,5 +42,6 @@ export function loadServerConfig(): ServerConfig {
     serviceJwtSecret: process.env.SERVICE_JWT_SECRET || 'service-super-secret',
     enableAuth: process.env.ENABLE_AUTH !== 'false', // Auth enabled by default
     authLevel: (process.env.AUTH_LEVEL as 'global' | 'service' | 'endpoint') || 'endpoint',
+    apiKeyExpirationDays: parseInt(process.env.API_KEY_EXPIRATION_DAYS || '30', 10),
   };
 }

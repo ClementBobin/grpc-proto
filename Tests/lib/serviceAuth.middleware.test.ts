@@ -7,6 +7,8 @@ import {
   requireServiceAuthGlobal,
   requireServiceAuthEndpoint,
   applyServiceAuthMiddleware,
+  generateApiKey,
+  createApiKey,
 } from '@/lib/middleware/serviceAuth.middleware';
 
 // Mock Prisma Client
@@ -17,6 +19,11 @@ jest.mock('@prisma/client', () => {
     },
     serviceEndpoint: {
       findMany: jest.fn(),
+    },
+    apiKey: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      create: jest.fn(),
     },
     $disconnect: jest.fn(),
   };
@@ -465,6 +472,159 @@ describe('Service Auth Middleware', () => {
         where: { serviceName: 'UserService' },
         include: { permission: true },
       });
+    });
+  });
+
+  describe('API Key Authentication', () => {
+    it('should allow requests with valid API key', async () => {
+      const apiKey = 'a'.repeat(64); // 64 hex character API key
+      mockCall.metadata.get.mockReturnValue([`Bearer ${apiKey}`]);
+
+      // Mock API key lookup
+      (prisma as any).apiKey = {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'key-1',
+          key: apiKey,
+          serviceId: 'service-1',
+          expiresAt: new Date(Date.now() + 86400000), // Expires tomorrow
+          isRevoked: false,
+          service: {
+            id: 'service-1',
+            name: 'api-rest-service',
+          },
+        }),
+        update: jest.fn(),
+      };
+
+      // Mock database response for service
+      prisma.service.findUnique.mockResolvedValue({
+        id: 'service-1',
+        name: 'api-rest-service',
+        serviceRoles: [
+          {
+            role: {
+              name: 'service-admin',
+              rolePermissions: [
+                { permission: { name: 'user:get' } },
+              ],
+            },
+          },
+        ],
+      });
+
+      const wrappedHandler = requireServiceAuth(mockHandler);
+      await wrappedHandler(mockCall, mockCallback);
+
+      expect(mockHandler).toHaveBeenCalled();
+      expect(mockCallback).toHaveBeenCalledWith(null, { success: true });
+      expect(mockCall.service).toBeDefined();
+      expect(mockCall.service.serviceName).toBe('api-rest-service');
+      expect((prisma as any).apiKey.update).toHaveBeenCalledWith({
+        where: { key: apiKey },
+        data: { lastUsedAt: expect.any(Date) },
+      });
+    });
+
+    it('should reject requests with expired API key', async () => {
+      const apiKey = 'b'.repeat(64);
+      mockCall.metadata.get.mockReturnValue([`Bearer ${apiKey}`]);
+
+      // Mock API key lookup with expired key
+      (prisma as any).apiKey = {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'key-1',
+          key: apiKey,
+          serviceId: 'service-1',
+          expiresAt: new Date(Date.now() - 86400000), // Expired yesterday
+          isRevoked: false,
+          service: {
+            id: 'service-1',
+            name: 'api-rest-service',
+          },
+        }),
+      };
+
+      const wrappedHandler = requireServiceAuth(mockHandler);
+      await wrappedHandler(mockCall, mockCallback);
+
+      expect(mockHandler).not.toHaveBeenCalled();
+      expect(mockCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: grpc.status.UNAUTHENTICATED,
+          message: 'API key has expired',
+        }),
+        null
+      );
+    });
+
+    it('should reject requests with revoked API key', async () => {
+      const apiKey = 'c'.repeat(64);
+      mockCall.metadata.get.mockReturnValue([`Bearer ${apiKey}`]);
+
+      // Mock API key lookup with revoked key
+      (prisma as any).apiKey = {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'key-1',
+          key: apiKey,
+          serviceId: 'service-1',
+          expiresAt: new Date(Date.now() + 86400000),
+          isRevoked: true,
+          service: {
+            id: 'service-1',
+            name: 'api-rest-service',
+          },
+        }),
+      };
+
+      const wrappedHandler = requireServiceAuth(mockHandler);
+      await wrappedHandler(mockCall, mockCallback);
+
+      expect(mockHandler).not.toHaveBeenCalled();
+      expect(mockCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: grpc.status.UNAUTHENTICATED,
+          message: 'API key has been revoked',
+        }),
+        null
+      );
+    });
+
+    it('should reject requests with invalid API key format', async () => {
+      const apiKey = 'invalid-key-format';
+      mockCall.metadata.get.mockReturnValue([`Bearer ${apiKey}`]);
+
+      const wrappedHandler = requireServiceAuth(mockHandler);
+      await wrappedHandler(mockCall, mockCallback);
+
+      expect(mockHandler).not.toHaveBeenCalled();
+      expect(mockCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: grpc.status.UNAUTHENTICATED,
+        }),
+        null
+      );
+    });
+
+    it('should reject requests with non-existent API key', async () => {
+      const apiKey = 'd'.repeat(64);
+      mockCall.metadata.get.mockReturnValue([`Bearer ${apiKey}`]);
+
+      // Mock API key lookup returning null
+      (prisma as any).apiKey = {
+        findUnique: jest.fn().mockResolvedValue(null),
+      };
+
+      const wrappedHandler = requireServiceAuth(mockHandler);
+      await wrappedHandler(mockCall, mockCallback);
+
+      expect(mockHandler).not.toHaveBeenCalled();
+      expect(mockCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: grpc.status.UNAUTHENTICATED,
+          message: 'Invalid API key',
+        }),
+        null
+      );
     });
   });
 });

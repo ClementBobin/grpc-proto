@@ -21,7 +21,8 @@
     "prisma:seed": "prisma db seed",
     "postinstall": "prisma generate",
     "db:deploy": "npx prisma migrate deploy && npx prisma generate",
-    "generate:service-token": "ts-node -r tsconfig-paths/register scripts/generate-service-token.ts"
+    "generate:service-token": "ts-node -r tsconfig-paths/register scripts/generate-service-token.ts",
+    "generate:api-key": "ts-node -r tsconfig-paths/register scripts/generate-api-key.ts"
   },
   "keywords": [],
   "author": "",
