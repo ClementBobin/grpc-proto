@@ -43,12 +43,13 @@ model Role {
 }
 
 model Permission {
-  id              String           @id @default(cuid())
-  name            String           @unique
-  description     String?
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  rolePermissions RolePermission[]
+  id               String             @id @default(cuid())
+  name             String             @unique
+  description      String?
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  rolePermissions  RolePermission[]
+  serviceEndpoints ServiceEndpoint[]
 
   @@map("permissions")
 }
@@ -83,4 +84,17 @@ model RolePermission {
 
   @@id([roleId, permissionId])
   @@map("role_permissions")
+}
+
+model ServiceEndpoint {
+  id           String   @id @default(cuid())
+  serviceName  String   @map("service_name")
+  endpointName String   @map("endpoint_name")
+  permissionId String   @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([serviceName, endpointName])
+  @@map("service_endpoints")
 }

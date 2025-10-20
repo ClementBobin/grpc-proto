@@ -15,6 +15,9 @@ jest.mock('@prisma/client', () => {
     service: {
       findUnique: jest.fn(),
     },
+    serviceEndpoint: {
+      findMany: jest.fn(),
+    },
     $disconnect: jest.fn(),
   };
   return {
@@ -375,7 +378,7 @@ describe('Service Auth Middleware', () => {
         ],
       });
 
-      const wrappedService = applyServiceAuthMiddleware(mockImplementation, {
+      const wrappedService = await applyServiceAuthMiddleware(mockImplementation, {
         level: 'global',
         requiredRole: 'service-admin',
       });
@@ -407,7 +410,7 @@ describe('Service Auth Middleware', () => {
         ],
       });
 
-      const wrappedService = applyServiceAuthMiddleware(mockImplementation, {
+      const wrappedService = await applyServiceAuthMiddleware(mockImplementation, {
         level: 'endpoint',
         endpointPermissions: {
           getUser: 'user:get',
@@ -416,6 +419,52 @@ describe('Service Auth Middleware', () => {
       
       await wrappedService.getUser(mockCall, mockCallback);
       expect(mockHandler).toHaveBeenCalled();
+    });
+
+    it('should fetch endpoint permissions from database when serviceName is provided', async () => {
+      const token = jwt.sign(
+        { sub: 'api-rest-service', aud: 'grpc_auth', role: 'service-admin' },
+        SERVICE_JWT_SECRET
+      );
+      mockCall.metadata.get.mockReturnValue([`Bearer ${token}`]);
+
+      // Mock database response for service auth
+      prisma.service.findUnique.mockResolvedValue({
+        id: 'service-1',
+        name: 'api-rest-service',
+        serviceRoles: [
+          {
+            role: {
+              name: 'service-admin',
+              rolePermissions: [
+                { permission: { name: 'user:get' } },
+              ],
+            },
+          },
+        ],
+      });
+
+      // Mock database response for endpoint permissions
+      (prisma as any).serviceEndpoint = {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            endpointName: 'getUser',
+            permission: { name: 'user:get' },
+          },
+        ]),
+      };
+
+      const wrappedService = await applyServiceAuthMiddleware(mockImplementation, {
+        level: 'endpoint',
+        serviceName: 'UserService',
+      });
+      
+      await wrappedService.getUser(mockCall, mockCallback);
+      expect(mockHandler).toHaveBeenCalled();
+      expect((prisma as any).serviceEndpoint.findMany).toHaveBeenCalledWith({
+        where: { serviceName: 'UserService' },
+        include: { permission: true },
+      });
     });
   });
 });

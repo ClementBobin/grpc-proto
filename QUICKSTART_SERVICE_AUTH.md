@@ -78,8 +78,15 @@ client.getUser({ id: 'user-id' }, metadata, (err, response) => {
 ```typescript
 import { applyServiceAuthMiddleware } from '@/lib/middleware/serviceAuth.middleware';
 
-// Apply permission-based auth
-const userServiceWithAuth = applyServiceAuthMiddleware(userServiceImplementation, {
+// Database-driven approach (recommended)
+// Permissions are automatically fetched from database
+const userServiceWithAuth = await applyServiceAuthMiddleware(userServiceImplementation, {
+  level: 'endpoint',
+  serviceName: 'UserService',
+});
+
+// Or manual approach (legacy)
+const userServiceWithAuth = await applyServiceAuthMiddleware(userServiceImplementation, {
   level: 'endpoint',
   endpointPermissions: {
     getUser: 'user:get',
@@ -139,6 +146,15 @@ await prisma.serviceRole.create({
   data: {
     serviceId: service.id,
     roleId: role.id,
+  },
+});
+
+// 6. Create endpoint mappings (optional, for database-driven approach)
+await prisma.serviceEndpoint.create({
+  data: {
+    serviceName: 'YourServiceName',
+    endpointName: 'yourEndpointName',
+    permissionId: permission.id,
   },
 });
 ```

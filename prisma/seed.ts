@@ -166,6 +166,33 @@ async function main() {
   });
   console.log('Assigned service-admin role to api-rest-service');
 
+  // Create service endpoint mappings for UserService
+  const userServiceEndpoints = [
+    { endpointName: 'getUser', permissionId: getUserPermission.id },
+    { endpointName: 'createUser', permissionId: createUserPermission.id },
+    { endpointName: 'updateUser', permissionId: updateUserPermission.id },
+    { endpointName: 'deleteUser', permissionId: deleteUserPermission.id },
+    { endpointName: 'listUsers', permissionId: listUsersPermission.id },
+  ];
+
+  for (const endpoint of userServiceEndpoints) {
+    await prisma.serviceEndpoint.upsert({
+      where: {
+        serviceName_endpointName: {
+          serviceName: 'UserService',
+          endpointName: endpoint.endpointName,
+        },
+      },
+      update: {},
+      create: {
+        serviceName: 'UserService',
+        endpointName: endpoint.endpointName,
+        permissionId: endpoint.permissionId,
+      },
+    });
+    console.log(`Created endpoint mapping: UserService.${endpoint.endpointName}`);
+  }
+
   // Create Alice user
   const alice = await prisma.user.upsert({
     where: { email: 'alice@example.com' },

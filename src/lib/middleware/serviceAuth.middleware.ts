@@ -232,6 +232,25 @@ export function requireServiceAuthGlobal<T extends grpc.UntypedServiceImplementa
 }
 
 /**
+ * Fetch endpoint permissions from database for a service
+ */
+async function getServiceEndpointPermissions(serviceName: string): Promise<{ [endpoint: string]: string }> {
+  const endpoints = await prisma.serviceEndpoint.findMany({
+    where: { serviceName },
+    include: {
+      permission: true,
+    },
+  });
+
+  const permissions: { [endpoint: string]: string } = {};
+  for (const endpoint of endpoints) {
+    permissions[endpoint.endpointName] = endpoint.permission.name;
+  }
+
+  return permissions;
+}
+
+/**
  * Wrap service implementation with endpoint-level permission checks
  */
 export function requireServiceAuthEndpoint<T extends grpc.UntypedServiceImplementation>(
@@ -258,23 +277,33 @@ export function requireServiceAuthEndpoint<T extends grpc.UntypedServiceImplemen
 
 /**
  * Apply service auth middleware based on configuration
+ * If serviceName is provided and no endpointPermissions are given,
+ * permissions will be fetched from the database
  */
-export function applyServiceAuthMiddleware<T extends grpc.UntypedServiceImplementation>(
+export async function applyServiceAuthMiddleware<T extends grpc.UntypedServiceImplementation>(
   serviceImplementation: T,
   options?: {
     level?: 'global' | 'endpoint';
     requiredRole?: string;
     endpointPermissions?: { [endpoint: string]: string };
+    serviceName?: string;
   }
-): T {
+): Promise<T> {
   const level = options?.level || 'endpoint';
 
   switch (level) {
     case 'global':
       return requireServiceAuthGlobal(serviceImplementation, options?.requiredRole);
     case 'endpoint':
-      if (options?.endpointPermissions) {
-        return requireServiceAuthEndpoint(serviceImplementation, options.endpointPermissions);
+      let endpointPermissions = options?.endpointPermissions;
+      
+      // If no permissions provided but serviceName is given, fetch from database
+      if (!endpointPermissions && options?.serviceName) {
+        endpointPermissions = await getServiceEndpointPermissions(options.serviceName);
+      }
+      
+      if (endpointPermissions) {
+        return requireServiceAuthEndpoint(serviceImplementation, endpointPermissions);
       }
       return serviceImplementation;
     default:
