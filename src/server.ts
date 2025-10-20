@@ -1,7 +1,6 @@
 import { GrpcServer, setupGracefulShutdown } from '@/lib/grpc';
 import { infraServiceImplementation } from '@/grpc/infra.server';
 import { userServiceImplementation } from '@/grpc/user.server';
-import { applyAuthMiddleware } from '@/lib/middleware/auth.middleware';
 import { applyServiceAuthMiddleware } from '@/lib/middleware/serviceAuth.middleware';
 import { loadServerConfig } from '@/lib/config';
 
