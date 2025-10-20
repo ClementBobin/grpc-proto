@@ -7,13 +7,13 @@
  *   npm run generate:service-token -- --help
  */
 
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { loadServerConfig } from '../src/lib/config';
 
 interface TokenOptions {
   service: string;
   role: string;
-  expiresIn?: string;
+  expiresIn?: string | number;
 }
 
 function generateServiceToken(options: TokenOptions): string {
@@ -26,9 +26,11 @@ function generateServiceToken(options: TokenOptions): string {
     role: options.role,
   };
 
-  const token = jwt.sign(payload, SERVICE_JWT_SECRET, {
-    expiresIn: options.expiresIn || '1h',
-  });
+  const signOptions: SignOptions = {
+    expiresIn: (options.expiresIn || '1h') as any,
+  };
+
+  const token = jwt.sign(payload, SERVICE_JWT_SECRET, signOptions);
 
   return token;
 }
