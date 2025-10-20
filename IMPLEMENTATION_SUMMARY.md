@@ -41,7 +41,7 @@ Wraps all methods in a service with the same role requirement.
 Applies different permissions to different endpoints (most flexible).
 
 #### `applyServiceAuthMiddleware`
-Configurable wrapper that applies auth based on options.
+Configurable wrapper that applies auth based on options. **Now async and supports database-driven permissions.**
 
 ### 4. Default Seed Data
 - **Role**: `service-admin`
@@ -52,6 +52,12 @@ Configurable wrapper that applies auth based on options.
   - `user:delete` - Delete users
   - `user:list` - List users
 - **Service**: `api-rest-service` with `service-admin` role
+- **Service Endpoints**: Mappings for UserService endpoints
+  - `UserService.getUser` → `user:get`
+  - `UserService.createUser` → `user:create`
+  - `UserService.updateUser` → `user:update`
+  - `UserService.deleteUser` → `user:delete`
+  - `UserService.listUsers` → `user:list`
 - **User**: Alice (alice@example.com)
 
 ### 5. Testing
@@ -98,7 +104,14 @@ Located at `scripts/service-auth-example.ts` - demonstrates proper usage
 // In server.ts
 import { applyServiceAuthMiddleware } from '@/lib/middleware/serviceAuth.middleware';
 
-const userServiceWithAuth = applyServiceAuthMiddleware(userServiceImplementation, {
+// Database-driven approach (recommended)
+const userServiceWithAuth = await applyServiceAuthMiddleware(userServiceImplementation, {
+  level: 'endpoint',
+  serviceName: 'UserService',
+});
+
+// Manual approach (legacy)
+const userServiceWithAuth = await applyServiceAuthMiddleware(userServiceImplementation, {
   level: 'endpoint',
   endpointPermissions: {
     getUser: 'user:get',

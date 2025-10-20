@@ -66,8 +66,15 @@ client.getUser({ id: 'user-id' }, metadata, (err, response) => {
 ```typescript
 import { applyServiceAuthMiddleware } from '@/lib/middleware/serviceAuth.middleware';
 
-// Apply permission-based auth to all endpoints
-const userServiceWithAuth = applyServiceAuthMiddleware(userServiceImplementation, {
+// Database-driven approach (recommended)
+// Permissions are automatically fetched from database
+const userServiceWithAuth = await applyServiceAuthMiddleware(userServiceImplementation, {
+  level: 'endpoint',
+  serviceName: 'UserService',
+});
+
+// Manual approach (legacy)
+const userServiceWithAuth = await applyServiceAuthMiddleware(userServiceImplementation, {
   level: 'endpoint',
   endpointPermissions: {
     getUser: 'user:get',
@@ -79,7 +86,7 @@ const userServiceWithAuth = applyServiceAuthMiddleware(userServiceImplementation
 });
 
 // Apply role-based auth to all endpoints
-const adminServiceWithAuth = applyServiceAuthMiddleware(adminServiceImplementation, {
+const adminServiceWithAuth = await applyServiceAuthMiddleware(adminServiceImplementation, {
   level: 'global',
   requiredRole: 'service-admin',
 });

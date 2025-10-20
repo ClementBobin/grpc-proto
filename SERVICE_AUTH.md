@@ -57,6 +57,17 @@ role_id: string (FK -> Roles)
 permission_id: string (FK -> Permissions)
 ```
 
+#### ServiceEndpoints
+Maps service endpoints to required permissions.
+```
+id: string (PK)
+service_name: string
+endpoint_name: string
+permission_id: string (FK -> Permissions)
+created_at: DateTime
+updated_at: DateTime
+```
+
 ## Service JWT Format
 
 Service JWTs must include the following claims:
@@ -112,8 +123,15 @@ In your server setup, apply service authentication middleware:
 ```typescript
 import { applyServiceAuthMiddleware } from '@/lib/middleware/serviceAuth.middleware';
 
-// Permission-based endpoint protection
-const userServiceWithAuth = applyServiceAuthMiddleware(userServiceImplementation, {
+// Database-driven endpoint protection (recommended)
+// Permissions are automatically fetched from the database based on serviceName
+const userServiceWithAuth = await applyServiceAuthMiddleware(userServiceImplementation, {
+  level: 'endpoint',
+  serviceName: 'UserService',
+});
+
+// Or manually specify permissions (legacy approach)
+const userServiceWithAuth = await applyServiceAuthMiddleware(userServiceImplementation, {
   level: 'endpoint',
   endpointPermissions: {
     getUser: 'user:get',
@@ -125,11 +143,13 @@ const userServiceWithAuth = applyServiceAuthMiddleware(userServiceImplementation
 });
 
 // Or role-based global protection
-const userServiceWithAuth = applyServiceAuthMiddleware(userServiceImplementation, {
+const userServiceWithAuth = await applyServiceAuthMiddleware(userServiceImplementation, {
   level: 'global',
   requiredRole: 'service-admin',
 });
 ```
+
+**Note:** The `applyServiceAuthMiddleware` function is now async and returns a Promise.
 
 ### 4. Accessing Service Info in Handlers
 
@@ -159,7 +179,13 @@ The seed script creates:
    - `user:delete` - Delete users
    - `user:list` - List users
 3. **Service**: `api-rest-service` with role `service-admin`
-4. **User**: Alice (alice@example.com)
+4. **Service Endpoints**: Mappings for UserService endpoints
+   - `UserService.getUser` → `user:get`
+   - `UserService.createUser` → `user:create`
+   - `UserService.updateUser` → `user:update`
+   - `UserService.deleteUser` → `user:delete`
+   - `UserService.listUsers` → `user:list`
+5. **User**: Alice (alice@example.com)
 
 Run the seed:
 ```bash
@@ -219,6 +245,15 @@ async function createService() {
       roleId: role.id,
     },
   });
+
+  // Create endpoint mappings for the service
+  await prisma.serviceEndpoint.create({
+    data: {
+      serviceName: 'UserService',
+      endpointName: 'getUser',
+      permissionId: permission.id,
+    },
+  });
 }
 ```
 
@@ -276,10 +311,17 @@ requireServiceAuthEndpoint(serviceImplementation, {
 ```
 
 ### `applyServiceAuthMiddleware`
-Flexible wrapper that applies auth based on configuration.
+Flexible wrapper that applies auth based on configuration. **This function is now async.**
 
 ```typescript
-applyServiceAuthMiddleware(serviceImplementation, {
+// Database-driven (recommended)
+await applyServiceAuthMiddleware(serviceImplementation, {
+  level: 'endpoint',
+  serviceName: 'UserService',
+})
+
+// Manual permissions (legacy)
+await applyServiceAuthMiddleware(serviceImplementation, {
   level: 'endpoint',
   endpointPermissions: { ... },
 })
