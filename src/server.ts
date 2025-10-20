@@ -28,16 +28,10 @@ async function main() {
     });
 
     // Add user service with SERVICE auth middleware (permission-based)
-    // This demonstrates the new service authentication system
-    const userServiceWithServiceAuth = applyServiceAuthMiddleware(userServiceImplementation, {
+    // Permissions are now automatically fetched from database based on serviceName
+    const userServiceWithServiceAuth = await applyServiceAuthMiddleware(userServiceImplementation, {
       level: 'endpoint',
-      endpointPermissions: {
-        getUser: 'user:get',
-        createUser: 'user:create',
-        updateUser: 'user:update',
-        deleteUser: 'user:delete',
-        listUsers: 'user:list',
-      },
+      serviceName: 'UserService',
     });
 
     server.addService({
