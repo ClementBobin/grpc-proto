@@ -1,0 +1,283 @@
+import * as grpc from '@grpc/grpc-js';
+import jwt from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
+import { loadServerConfig } from '../config';
+
+const config = loadServerConfig();
+const SERVICE_JWT_SECRET = config.serviceJwtSecret;
+const prisma = new PrismaClient();
+
+/**
+ * Service JWT payload interface
+ */
+export interface ServiceJwtPayload {
+  sub: string; // service ID
+  aud: string; // audience (should be 'grpc_auth')
+  role: string; // service role (e.g., 'service-admin')
+  iat?: number;
+  exp?: number;
+}
+
+/**
+ * Service info attached to gRPC call
+ */
+export interface ServiceInfo {
+  serviceId: string;
+  serviceName: string;
+  role: string;
+  permissions: string[];
+}
+
+/**
+ * Verify service JWT and extract payload
+ */
+function verifyServiceToken(token: string): ServiceJwtPayload {
+  try {
+    const payload = jwt.verify(token, SERVICE_JWT_SECRET) as ServiceJwtPayload;
+    
+    // Verify audience
+    if (payload.aud !== 'grpc_auth') {
+      throw new Error('Invalid audience');
+    }
+    
+    return payload;
+  } catch (err) {
+    throw { code: grpc.status.UNAUTHENTICATED, message: 'Invalid service token' };
+  }
+}
+
+/**
+ * Check if service has required role
+ */
+async function checkServiceRole(serviceId: string, requiredRole?: string): Promise<ServiceInfo> {
+  const service = await prisma.service.findUnique({
+    where: { name: serviceId },
+    include: {
+      serviceRoles: {
+        include: {
+          role: {
+            include: {
+              rolePermissions: {
+                include: {
+                  permission: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!service) {
+    throw { code: grpc.status.PERMISSION_DENIED, message: 'Service not found' };
+  }
+
+  // Extract all roles for this service
+  const serviceRoles = service.serviceRoles.map((sr) => sr.role);
+  
+  // Check if service has the required role
+  if (requiredRole) {
+    const hasRole = serviceRoles.some((role) => role.name === requiredRole);
+    if (!hasRole) {
+      throw { code: grpc.status.PERMISSION_DENIED, message: 'Insufficient service role' };
+    }
+  }
+
+  // Extract all permissions from all roles
+  const permissions = serviceRoles.flatMap((role) =>
+    role.rolePermissions.map((rp) => rp.permission.name)
+  );
+
+  // Get the primary role (first one or the one matching requiredRole)
+  const primaryRole = requiredRole
+    ? serviceRoles.find((r) => r.name === requiredRole)?.name || serviceRoles[0]?.name || ''
+    : serviceRoles[0]?.name || '';
+
+  return {
+    serviceId: service.id,
+    serviceName: service.name,
+    role: primaryRole,
+    permissions: [...new Set(permissions)], // Remove duplicates
+  };
+}
+
+/**
+ * Check if service has specific permission for an endpoint
+ */
+async function checkServicePermission(
+  serviceId: string,
+  permissionName: string
+): Promise<boolean> {
+  const service = await prisma.service.findUnique({
+    where: { name: serviceId },
+    include: {
+      serviceRoles: {
+        include: {
+          role: {
+            include: {
+              rolePermissions: {
+                include: {
+                  permission: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!service) {
+    return false;
+  }
+
+  // Check if any of the service's roles has the required permission
+  for (const serviceRole of service.serviceRoles) {
+    const hasPermission = serviceRole.role.rolePermissions.some(
+      (rp) => rp.permission.name === permissionName
+    );
+    if (hasPermission) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Middleware to require service authentication
+ */
+export function requireServiceAuth<T, U>(
+  handler: (call: grpc.ServerUnaryCall<T, U>, callback: grpc.sendUnaryData<U>) => void | Promise<void>,
+  requiredRole?: string
+) {
+  return async (call: grpc.ServerUnaryCall<T, U>, callback: grpc.sendUnaryData<U>) => {
+    try {
+      const meta = call.metadata.get('service-authorization');
+      if (!meta || meta.length === 0) {
+        throw { code: grpc.status.UNAUTHENTICATED, message: 'Missing service token' };
+      }
+
+      const token = (meta[0] as string).replace(/^Bearer\s+/i, '');
+      const payload = verifyServiceToken(token);
+      
+      // Check role and get service info
+      const serviceInfo = await checkServiceRole(payload.sub, requiredRole);
+      
+      // Attach service info to call
+      (call as any).service = serviceInfo;
+
+      await handler(call, callback);
+    } catch (err: any) {
+      callback(err, null as any);
+    }
+  };
+}
+
+/**
+ * Middleware to require service authentication with permission check
+ */
+export function requireServiceAuthWithPermission<T, U>(
+  handler: (call: grpc.ServerUnaryCall<T, U>, callback: grpc.sendUnaryData<U>) => void | Promise<void>,
+  permissionName: string
+) {
+  return async (call: grpc.ServerUnaryCall<T, U>, callback: grpc.sendUnaryData<U>) => {
+    try {
+      const meta = call.metadata.get('service-authorization');
+      if (!meta || meta.length === 0) {
+        throw { code: grpc.status.UNAUTHENTICATED, message: 'Missing service token' };
+      }
+
+      const token = (meta[0] as string).replace(/^Bearer\s+/i, '');
+      const payload = verifyServiceToken(token);
+      
+      // Check permission
+      const hasPermission = await checkServicePermission(payload.sub, permissionName);
+      if (!hasPermission) {
+        throw { 
+          code: grpc.status.PERMISSION_DENIED, 
+          message: `Service does not have permission: ${permissionName}` 
+        };
+      }
+
+      // Get service info
+      const serviceInfo = await checkServiceRole(payload.sub);
+      
+      // Attach service info to call
+      (call as any).service = serviceInfo;
+
+      await handler(call, callback);
+    } catch (err: any) {
+      callback(err, null as any);
+    }
+  };
+}
+
+/**
+ * Wrap entire service implementation with service auth
+ */
+export function requireServiceAuthGlobal<T extends grpc.UntypedServiceImplementation>(
+  serviceImplementation: T,
+  requiredRole?: string
+): T {
+  const wrapped: any = {};
+
+  for (const methodName of Object.keys(serviceImplementation)) {
+    const originalHandler = (serviceImplementation as any)[methodName];
+    wrapped[methodName] = requireServiceAuth(originalHandler, requiredRole);
+  }
+
+  return wrapped as T;
+}
+
+/**
+ * Wrap service implementation with endpoint-level permission checks
+ */
+export function requireServiceAuthEndpoint<T extends grpc.UntypedServiceImplementation>(
+  serviceImplementation: T,
+  endpointPermissions: { [endpoint: string]: string }
+): T {
+  const wrapped: any = {};
+
+  for (const methodName of Object.keys(serviceImplementation)) {
+    const originalHandler = (serviceImplementation as any)[methodName];
+    const permission = endpointPermissions[methodName];
+
+    if (permission) {
+      // Auth with permission check enabled for this endpoint
+      wrapped[methodName] = requireServiceAuthWithPermission(originalHandler, permission);
+    } else {
+      // No specific permission required, use original handler
+      wrapped[methodName] = originalHandler;
+    }
+  }
+
+  return wrapped as T;
+}
+
+/**
+ * Apply service auth middleware based on configuration
+ */
+export function applyServiceAuthMiddleware<T extends grpc.UntypedServiceImplementation>(
+  serviceImplementation: T,
+  options?: {
+    level?: 'global' | 'endpoint';
+    requiredRole?: string;
+    endpointPermissions?: { [endpoint: string]: string };
+  }
+): T {
+  const level = options?.level || 'endpoint';
+
+  switch (level) {
+    case 'global':
+      return requireServiceAuthGlobal(serviceImplementation, options?.requiredRole);
+    case 'endpoint':
+      if (options?.endpointPermissions) {
+        return requireServiceAuthEndpoint(serviceImplementation, options.endpointPermissions);
+      }
+      return serviceImplementation;
+    default:
+      return serviceImplementation;
+  }
+}

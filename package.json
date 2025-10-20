@@ -18,12 +18,17 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
+    "prisma:seed": "prisma db seed",
     "postinstall": "prisma generate",
-    "db:deploy": "npx prisma migrate deploy && npx prisma generate"
+    "db:deploy": "npx prisma migrate deploy && npx prisma generate",
+    "generate:service-token": "ts-node -r tsconfig-paths/register scripts/generate-service-token.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "prisma": {
+    "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
+  },
   "devDependencies": {
     "@types/google-protobuf": "^3.15.12",
     "@types/jest": "^30.0.0",

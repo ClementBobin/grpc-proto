@@ -2,6 +2,7 @@ import { GrpcServer, setupGracefulShutdown } from '@/lib/grpc';
 import { infraServiceImplementation } from '@/grpc/infra.server';
 import { userServiceImplementation } from '@/grpc/user.server';
 import { applyAuthMiddleware } from '@/lib/middleware/auth.middleware';
+import { applyServiceAuthMiddleware } from '@/lib/middleware/serviceAuth.middleware';
 import { loadServerConfig } from '@/lib/config';
 
 const server = new GrpcServer();
@@ -26,24 +27,16 @@ async function main() {
       implementation: infraServiceImplementation,
     });
 
-    // Add user service with auth middleware
-    // Example: Apply endpoint-level auth
-    const userServiceWithAuth = applyAuthMiddleware(userServiceImplementation, {
-      level: config.authLevel,
-      // Global auth example: require 'admin' role for all endpoints
-      globalRoles: ['admin', 'user'],
-      // Service-level auth example
-      serviceConfig: {
-        enabled: true,
-        allowedRoles: ['admin', 'user'],
-      },
-      // Endpoint-level auth example: configure per-method
-      endpointConfig: {
-        createUser: { enabled: true, allowedRoles: ['admin'] },
-        updateUser: { enabled: true, allowedRoles: ['admin', 'user'] },
-        deleteUser: { enabled: true, allowedRoles: ['admin'] },
-        getUser: { enabled: true, allowedRoles: ['admin', 'user'] },
-        listUsers: { enabled: true, allowedRoles: ['admin', 'user'] },
+    // Add user service with SERVICE auth middleware (permission-based)
+    // This demonstrates the new service authentication system
+    const userServiceWithServiceAuth = applyServiceAuthMiddleware(userServiceImplementation, {
+      level: 'endpoint',
+      endpointPermissions: {
+        getUser: 'user:get',
+        createUser: 'user:create',
+        updateUser: 'user:update',
+        deleteUser: 'user:delete',
+        listUsers: 'user:list',
       },
     });
 
@@ -51,7 +44,7 @@ async function main() {
       protoPath: 'user.proto',
       packageName: 'user',
       serviceName: 'UserService',
-      implementation: userServiceWithAuth,
+      implementation: userServiceWithServiceAuth,
     });
 
     // Start the server
