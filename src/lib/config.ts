@@ -10,6 +10,7 @@ export interface ServerConfig {
   keyPath?: string;
   caPath?: string;
   jwtSecret: string;
+  serviceJwtSecret: string;
   enableAuth: boolean;
   authLevel: 'global' | 'service' | 'endpoint';
 }
@@ -37,6 +38,7 @@ export function loadServerConfig(): ServerConfig {
     keyPath: process.env.TLS_KEY_PATH || './server.key',
     caPath: process.env.TLS_CA_PATH || './ca.crt',
     jwtSecret: process.env.JWT_SECRET || 'super-secret',
+    serviceJwtSecret: process.env.SERVICE_JWT_SECRET || 'service-super-secret',
     enableAuth: process.env.ENABLE_AUTH !== 'false', // Auth enabled by default
     authLevel: (process.env.AUTH_LEVEL as 'global' | 'service' | 'endpoint') || 'endpoint',
   };

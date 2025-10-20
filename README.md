@@ -8,6 +8,7 @@ A TypeScript gRPC microservice with Prisma, Zod validation, and comprehensive te
 - **HTTP/HTTPS Support**: Configurable to run with or without TLS
 - **RBAC (Role-Based Access Control)**: Flexible authentication at global, service, or endpoint level
 - **JWT Authentication**: Secure token-based authentication with role verification
+- **Service Authentication**: Database-driven service authentication with permission-based access control
 - **Prisma ORM**: Database integration with SQLite
 - **Zod**: Schema validation for data integrity
 - **Jest**: Comprehensive testing framework
@@ -68,7 +69,8 @@ Key configuration options:
 - **USE_TLS**: Set to `true` for HTTPS/TLS, `false` for HTTP (default: false)
 - **ENABLE_AUTH**: Set to `false` to disable authentication (default: true)
 - **AUTH_LEVEL**: Choose `global`, `service`, or `endpoint` (default: endpoint)
-- **JWT_SECRET**: Secret key for JWT token signing
+- **JWT_SECRET**: Secret key for JWT token signing (user authentication)
+- **SERVICE_JWT_SECRET**: Secret key for service JWT token signing (service authentication)
 
 See `.env.example` for all available options.
 
@@ -83,7 +85,8 @@ See `.env.example` for all available options.
 | `TLS_CA_PATH` | `./ca.crt` | Path to CA certificate (optional) |
 | `ENABLE_AUTH` | `true` | Enable authentication (`true`/`false`) |
 | `AUTH_LEVEL` | `endpoint` | Auth level (`global`/`service`/`endpoint`) |
-| `JWT_SECRET` | `super-secret` | Secret key for JWT signing |
+| `JWT_SECRET` | `super-secret` | Secret key for user JWT signing |
+| `SERVICE_JWT_SECRET` | `service-super-secret` | Secret key for service JWT signing |
 | `DATABASE_URL` | `file:./dev.db` | Database connection URL |
 
 ### Database Setup
@@ -121,6 +124,10 @@ npm run prisma:push
 - `npm run prisma:generate` - Generate Prisma client
 - `npm run prisma:migrate` - Run database migrations
 - `npm run prisma:push` - Push schema to database
+- `npm run prisma:seed` - Seed database with default data
+
+**Service Authentication:**
+- `npm run generate:service-token` - Generate service JWT token
 
 ### Running the gRPC Server
 
@@ -247,6 +254,51 @@ rpc UpdateUser (UpdateUserRequest) returns (UpdateUserResponse);
 rpc DeleteUser (DeleteUserRequest) returns (DeleteUserResponse);
 rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);
 ```
+
+## Service Authentication
+
+This project includes a comprehensive service authentication system that allows external services to authenticate and access endpoints based on their assigned permissions.
+
+### Quick Start
+
+1. **Generate a service token:**
+```bash
+npm run generate:service-token -- --service api-rest-service --role service-admin
+```
+
+2. **Use the token in gRPC calls:**
+```typescript
+const metadata = new grpc.Metadata();
+metadata.add('service-authorization', `Bearer ${serviceToken}`);
+client.getUser({ id: 'user-123' }, metadata, callback);
+```
+
+3. **See comprehensive documentation:**
+- [QUICKSTART_SERVICE_AUTH.md](./QUICKSTART_SERVICE_AUTH.md) - Getting started guide
+- [SERVICE_AUTH.md](./SERVICE_AUTH.md) - Complete system documentation
+- [EXAMPLES_SERVICE_AUTH.md](./EXAMPLES_SERVICE_AUTH.md) - 10 practical examples
+- [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md) - Architecture overview
+
+### Features
+
+- **Database-driven permissions**: Services, roles, and permissions stored in database
+- **JWT authentication**: Separate secret for service tokens (SERVICE_JWT_SECRET)
+- **Fine-grained access control**: Permission-based endpoint protection
+- **Comprehensive testing**: 22 service auth tests (64 total)
+- **Helper utilities**: Token generator and example client
+
+### Environment Variables
+
+```bash
+SERVICE_JWT_SECRET=service-super-secret  # Required for service auth
+```
+
+### Default Service
+
+After running `npm run prisma:seed`:
+- Service: `api-rest-service`
+- Role: `service-admin`
+- Permissions: user:get, user:create, user:update, user:delete, user:list
 
 ## Authentication & RBAC
 

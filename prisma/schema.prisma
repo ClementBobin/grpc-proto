@@ -10,6 +10,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ===== grpc database models =====
+
 model HealthCheck {
   id        Int      @id @default(autoincrement())
   status    String
@@ -20,7 +22,65 @@ model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
+  promoId   String?  @map("promo_id")
   role      String   @default("user")
-  createdAt String   @default(dbgenerated("CURRENT_TIMESTAMP"))
-  updatedAt String   @default(dbgenerated("CURRENT_TIMESTAMP"))
+  createdAt String   @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at")
+  updatedAt String   @default(dbgenerated("CURRENT_TIMESTAMP")) @map("updated_at")
+}
+
+// ===== grpc_auth database models =====
+
+model Role {
+  id               String            @id @default(cuid())
+  name             String            @unique
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  services         Service[]
+  serviceRoles     ServiceRole[]
+  rolePermissions  RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  description     String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model Service {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  roleId       String?       @map("role_id")
+  role         Role?         @relation(fields: [roleId], references: [id])
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  serviceRoles ServiceRole[]
+
+  @@map("services")
+}
+
+model ServiceRole {
+  serviceId String  @map("service_id")
+  roleId    String  @map("role_id")
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  role      Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, roleId])
+  @@map("service_roles")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
 }
