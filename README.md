@@ -8,6 +8,7 @@ A TypeScript gRPC microservice with Prisma, Zod validation, and comprehensive te
 - **HTTP/HTTPS Support**: Configurable to run with or without TLS
 - **RBAC (Role-Based Access Control)**: Flexible authentication at global, service, or endpoint level
 - **JWT Authentication**: Secure token-based authentication with role verification
+- **API Key Authentication**: Renewable API keys with automatic expiration and revocation support
 - **Service Authentication**: Database-driven service authentication with permission-based access control
 - **Prisma ORM**: Database integration with SQLite
 - **Zod**: Schema validation for data integrity
@@ -87,6 +88,7 @@ See `.env.example` for all available options.
 | `AUTH_LEVEL` | `endpoint` | Auth level (`global`/`service`/`endpoint`) |
 | `JWT_SECRET` | `super-secret` | Secret key for user JWT signing |
 | `SERVICE_JWT_SECRET` | `service-super-secret` | Secret key for service JWT signing |
+| `API_KEY_EXPIRATION_DAYS` | `30` | Days until API keys expire |
 | `DATABASE_URL` | `file:./dev.db` | Database connection URL |
 
 ### Database Setup
@@ -128,6 +130,7 @@ npm run prisma:push
 
 **Service Authentication:**
 - `npm run generate:service-token` - Generate service JWT token
+- `npm run generate:api-key` - Generate API key for service authentication
 
 ### Running the gRPC Server
 
@@ -257,9 +260,31 @@ rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);
 
 ## Service Authentication
 
-This project includes a comprehensive service authentication system that allows external services to authenticate and access endpoints based on their assigned permissions.
+This project includes a comprehensive service authentication system that allows external services to authenticate using either JWT tokens or API keys with automatic expiration.
 
-### Quick Start
+### API Key Authentication (Recommended)
+
+API keys provide better security with automatic expiration and revocation capabilities.
+
+1. **Generate an API key:**
+```bash
+npm run generate:api-key -- --service api-rest-service --days 30
+```
+
+2. **Use the API key in gRPC calls:**
+```typescript
+const metadata = new grpc.Metadata();
+metadata.add('service-authorization', `Bearer ${apiKey}`);
+client.getUser({ id: 'user-123' }, metadata, callback);
+```
+
+3. **Key features:**
+- Automatic expiration (configurable, default 30 days)
+- Individual revocation support
+- Usage tracking (last used timestamp)
+- Backward compatible with JWT tokens
+
+### JWT Token Authentication (Legacy)
 
 1. **Generate a service token:**
 ```bash
@@ -273,7 +298,9 @@ metadata.add('service-authorization', `Bearer ${serviceToken}`);
 client.getUser({ id: 'user-123' }, metadata, callback);
 ```
 
-3. **See comprehensive documentation:**
+### Documentation
+
+- [API_KEY_AUTH.md](./API_KEY_AUTH.md) - Complete API key authentication guide
 - [QUICKSTART_SERVICE_AUTH.md](./QUICKSTART_SERVICE_AUTH.md) - Getting started guide
 - [SERVICE_AUTH.md](./SERVICE_AUTH.md) - Complete system documentation
 - [EXAMPLES_SERVICE_AUTH.md](./EXAMPLES_SERVICE_AUTH.md) - 10 practical examples
@@ -282,15 +309,19 @@ client.getUser({ id: 'user-123' }, metadata, callback);
 ### Features
 
 - **Database-driven permissions**: Services, roles, and permissions stored in database
+- **Dual authentication methods**: Support for both API keys and JWT tokens
+- **API key expiration**: Automatic expiration with configurable periods
+- **Revocation support**: Individual API keys can be revoked
 - **JWT authentication**: Separate secret for service tokens (SERVICE_JWT_SECRET)
 - **Fine-grained access control**: Permission-based endpoint protection
-- **Comprehensive testing**: 22 service auth tests (64 total)
-- **Helper utilities**: Token generator and example client
+- **Comprehensive testing**: 24 service auth tests (69 total)
+- **Helper utilities**: Token generator, API key generator, and example client
 
 ### Environment Variables
 
 ```bash
-SERVICE_JWT_SECRET=service-super-secret  # Required for service auth
+SERVICE_JWT_SECRET=service-super-secret  # Required for JWT service auth
+API_KEY_EXPIRATION_DAYS=30              # Days until API keys expire
 ```
 
 ### Default Service

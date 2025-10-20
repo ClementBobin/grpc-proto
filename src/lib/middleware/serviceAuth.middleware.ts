@@ -2,6 +2,7 @@ import * as grpc from '@grpc/grpc-js';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { loadServerConfig } from '../config';
+import crypto from 'crypto';
 
 const config = loadServerConfig();
 const SERVICE_JWT_SECRET = config.serviceJwtSecret;
@@ -19,6 +20,14 @@ export interface ServiceJwtPayload {
 }
 
 /**
+ * API Key payload interface
+ */
+export interface ApiKeyPayload {
+  serviceId: string;
+  serviceName: string;
+}
+
+/**
  * Service info attached to gRPC call
  */
 export interface ServiceInfo {
@@ -29,20 +38,109 @@ export interface ServiceInfo {
 }
 
 /**
- * Verify service JWT and extract payload
+ * Generate a secure API key
  */
-function verifyServiceToken(token: string): ServiceJwtPayload {
-  try {
-    const payload = jwt.verify(token, SERVICE_JWT_SECRET) as ServiceJwtPayload;
-    
-    // Verify audience
-    if (payload.aud !== 'grpc_auth') {
-      throw new Error('Invalid audience');
+export function generateApiKey(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+/**
+ * Create API key for a service
+ */
+export async function createApiKey(serviceName: string, expirationDays?: number): Promise<{ key: string; expiresAt: Date }> {
+  const service = await prisma.service.findUnique({
+    where: { name: serviceName },
+  });
+
+  if (!service) {
+    throw new Error(`Service not found: ${serviceName}`);
+  }
+
+  const key = generateApiKey();
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + (expirationDays || config.apiKeyExpirationDays));
+
+  await prisma.apiKey.create({
+    data: {
+      key,
+      serviceId: service.id,
+      expiresAt,
+    },
+  });
+
+  return { key, expiresAt };
+}
+
+/**
+ * Revoke an API key
+ */
+export async function revokeApiKey(key: string): Promise<void> {
+  await prisma.apiKey.update({
+    where: { key },
+    data: { isRevoked: true },
+  });
+}
+
+/**
+ * Verify API key and extract service info
+ */
+async function verifyApiKey(key: string): Promise<ApiKeyPayload> {
+  const apiKey = await prisma.apiKey.findUnique({
+    where: { key },
+    include: {
+      service: true,
+    },
+  });
+
+  if (!apiKey) {
+    throw { code: grpc.status.UNAUTHENTICATED, message: 'Invalid API key' };
+  }
+
+  if (apiKey.isRevoked) {
+    throw { code: grpc.status.UNAUTHENTICATED, message: 'API key has been revoked' };
+  }
+
+  if (apiKey.expiresAt < new Date()) {
+    throw { code: grpc.status.UNAUTHENTICATED, message: 'API key has expired' };
+  }
+
+  // Update last used timestamp
+  await prisma.apiKey.update({
+    where: { key },
+    data: { lastUsedAt: new Date() },
+  });
+
+  return {
+    serviceId: apiKey.service.id,
+    serviceName: apiKey.service.name,
+  };
+}
+
+/**
+ * Verify service token (supports both JWT and API key)
+ */
+async function verifyServiceToken(token: string): Promise<{ serviceName: string; isApiKey: boolean }> {
+  // Check if it's an API key (64 hex characters) or JWT
+  const apiKeyPattern = /^[a-f0-9]{64}$/i;
+  
+  if (apiKeyPattern.test(token)) {
+    // It's an API key
+    const payload = await verifyApiKey(token);
+    return { serviceName: payload.serviceName, isApiKey: true };
+  } else {
+    // It's a JWT token
+    try {
+      const payload = jwt.verify(token, SERVICE_JWT_SECRET) as ServiceJwtPayload;
+      
+      // Verify audience
+      if (payload.aud !== 'grpc_auth') {
+        throw new Error('Invalid audience');
+      }
+      
+      return { serviceName: payload.sub, isApiKey: false };
+    } catch (err) {
+      throw { code: grpc.status.UNAUTHENTICATED, message: 'Invalid service token' };
     }
-    
-    return payload;
-  } catch (err) {
-    throw { code: grpc.status.UNAUTHENTICATED, message: 'Invalid service token' };
   }
 }
 
@@ -160,10 +258,10 @@ export function requireServiceAuth<T, U>(
       }
 
       const token = (meta[0] as string).replace(/^Bearer\s+/i, '');
-      const payload = verifyServiceToken(token);
+      const { serviceName } = await verifyServiceToken(token);
       
       // Check role and get service info
-      const serviceInfo = await checkServiceRole(payload.sub, requiredRole);
+      const serviceInfo = await checkServiceRole(serviceName, requiredRole);
       
       // Attach service info to call
       (call as any).service = serviceInfo;
@@ -190,10 +288,10 @@ export function requireServiceAuthWithPermission<T, U>(
       }
 
       const token = (meta[0] as string).replace(/^Bearer\s+/i, '');
-      const payload = verifyServiceToken(token);
+      const { serviceName } = await verifyServiceToken(token);
       
       // Check permission
-      const hasPermission = await checkServicePermission(payload.sub, permissionName);
+      const hasPermission = await checkServicePermission(serviceName, permissionName);
       if (!hasPermission) {
         throw { 
           code: grpc.status.PERMISSION_DENIED, 
@@ -202,7 +300,7 @@ export function requireServiceAuthWithPermission<T, U>(
       }
 
       // Get service info
-      const serviceInfo = await checkServiceRole(payload.sub);
+      const serviceInfo = await checkServiceRole(serviceName);
       
       // Attach service info to call
       (call as any).service = serviceInfo;
