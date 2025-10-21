@@ -12,7 +12,7 @@ module.exports = {
   },
   setupFilesAfterEnv: [
     '<rootDir>/__mocks__/singleton.ts',
-    //'<rootDir>/__mocks__/jest.setup.ts'
+    '<rootDir>/__mocks__/jest.setup.ts'
   ],
   clearMocks: true,
 };
