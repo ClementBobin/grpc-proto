@@ -9,6 +9,7 @@ export interface GrpcServiceDefinition {
   packageName: string;
   serviceName: string;
   implementation: grpc.UntypedServiceImplementation;
+  applyAuth?: boolean; // Optional flag to apply auth middleware (default: true)
 }
 
 /**
@@ -40,8 +41,9 @@ export class GrpcServer {
 
   /**
    * Add a gRPC service to the server
+   * Automatically applies API key authentication middleware based on database configuration
    */
-  addService(serviceDefinition: GrpcServiceDefinition): void {
+  async addService(serviceDefinition: GrpcServiceDefinition): Promise<void> {
     const protoPath = path.resolve(__dirname, '../../protos', serviceDefinition.protoPath);
     const proto = loadProtoFile(protoPath);
 
@@ -54,7 +56,24 @@ export class GrpcServer {
       );
     }
 
-    this.server.addService(serviceObj.service, serviceDefinition.implementation);
+    // Apply auth middleware automatically if not explicitly disabled
+    let implementation = serviceDefinition.implementation;
+    const applyAuth = serviceDefinition.applyAuth !== false; // Default to true
+    
+    if (applyAuth) {
+      const { applyServiceAuthMiddleware } = await import('./middleware/serviceAuth.middleware');
+      try {
+        implementation = await applyServiceAuthMiddleware(
+          serviceDefinition.implementation,
+          serviceDefinition.serviceName
+        );
+        console.log(`✓ Applied auth middleware to: ${serviceDefinition.serviceName}`);
+      } catch (error) {
+        console.warn(`⚠️  No auth configuration found for ${serviceDefinition.serviceName}, using original implementation`);
+      }
+    }
+
+    this.server.addService(serviceObj.service, implementation);
     this.services.push(serviceDefinition);
     console.log(`✓ Added service: ${serviceDefinition.packageName}.${serviceDefinition.serviceName}`);
   }
@@ -92,10 +111,7 @@ export class GrpcServer {
 
         console.log(`\n🚀 gRPC Server started on ${actualPort}`);
         console.log(`   Protocol: ${enableTLS ? 'gRPC with TLS' : 'gRPC insecure'}`);
-        console.log(`   Auth: ${this.config.enableAuth ? 'Enabled' : 'Disabled'}`);
-        if (this.config.enableAuth) {
-          console.log(`   Auth Level: ${this.config.authLevel}`);
-        }
+        console.log(`   Auth: API Key (automatically applied from DB configuration)`);
         console.log('\n📋 Registered services:');
         this.services.forEach(service => {
           console.log(`  - ${service.packageName}.${service.serviceName}`);

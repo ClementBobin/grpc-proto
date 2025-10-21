@@ -96,69 +96,14 @@ async function verifyApiKey(key: string): Promise<ApiKeyPayload> {
 }
 
 /**
- * Verify service token (supports both JWT and API key)
+ * Verify service token (API key only)
  */
-async function verifyServiceToken(token: string): Promise<{ serviceName: string; isApiKey: boolean }> {
-  // It's an API key
+async function verifyServiceToken(token: string): Promise<{ serviceName: string }> {
   const payload = await verifyApiKey(token);
-  return { serviceName: payload.serviceName, isApiKey: true };
+  return { serviceName: payload.serviceName };
 }
 
-/**
- * Check if service has required role
- */
-async function checkServiceRole(serviceId: string, requiredRole?: string): Promise<ServiceInfo> {
-  const service = await prisma.service.findUnique({
-    where: { name: serviceId },
-    include: {
-      serviceRoles: {
-        include: {
-          role: {
-            include: {
-              rolePermissions: {
-                include: {
-                  permission: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
 
-  if (!service) {
-    throw { code: grpc.status.PERMISSION_DENIED, message: 'Service not found' };
-  }
-
-  // Extract all roles for this service
-  const serviceRoles = service.serviceRoles.map((sr) => sr.role);
-  
-  // Check if service has the required role
-  if (requiredRole) {
-    const hasRole = serviceRoles.some((role) => role.name === requiredRole);
-    if (!hasRole) {
-      throw { code: grpc.status.PERMISSION_DENIED, message: 'Insufficient service role' };
-    }
-  }
-
-  // Extract all permissions from all roles
-  const permissions = serviceRoles.flatMap((role) =>
-    role.rolePermissions.map((rp) => rp.permission.name)
-  );
-
-  // Get the primary role (first one or the one matching requiredRole)
-  const primaryRole = requiredRole
-    ? serviceRoles.find((r) => r.name === requiredRole)?.name || serviceRoles[0]?.name || ''
-    : serviceRoles[0]?.name || '';
-
-  return {
-    serviceId: service.id,
-    serviceName: service.name,
-    role: primaryRole,
-    permissions: [...new Set(permissions)], // Remove duplicates
-  };
-}
 
 /**
  * Check if service has specific permission for an endpoint
@@ -203,35 +148,7 @@ async function checkServicePermission(
   return false;
 }
 
-/**
- * Middleware to require service authentication
- */
-export function requireServiceAuth<T, U>(
-  handler: (call: grpc.ServerUnaryCall<T, U>, callback: grpc.sendUnaryData<U>) => void | Promise<void>,
-  requiredRole?: string
-) {
-  return async (call: grpc.ServerUnaryCall<T, U>, callback: grpc.sendUnaryData<U>) => {
-    try {
-      const meta = call.metadata.get('service-authorization');
-      if (!meta || meta.length === 0) {
-        throw { code: grpc.status.UNAUTHENTICATED, message: 'Missing service token' };
-      }
 
-      const token = (meta[0] as string).replace(/^Bearer\s+/i, '');
-      const { serviceName } = await verifyServiceToken(token);
-      
-      // Check role and get service info
-      const serviceInfo = await checkServiceRole(serviceName, requiredRole);
-      
-      // Attach service info to call
-      (call as any).service = serviceInfo;
-
-      await handler(call, callback);
-    } catch (err: any) {
-      callback(err, null as any);
-    }
-  };
-}
 
 /**
  * Middleware to require service authentication with permission check
@@ -244,7 +161,7 @@ export function requireServiceAuthWithPermission<T, U>(
     try {
       const meta = call.metadata.get('service-authorization');
       if (!meta || meta.length === 0) {
-        throw { code: grpc.status.UNAUTHENTICATED, message: 'Missing service token' };
+        throw { code: grpc.status.UNAUTHENTICATED, message: 'Missing API key' };
       }
 
       const token = (meta[0] as string).replace(/^Bearer\s+/i, '');
@@ -259,11 +176,8 @@ export function requireServiceAuthWithPermission<T, U>(
         };
       }
 
-      // Get service info
-      const serviceInfo = await checkServiceRole(serviceName);
-      
-      // Attach service info to call
-      (call as any).service = serviceInfo;
+      // Attach service name to call for logging/debugging
+      (call as any).serviceName = serviceName;
 
       await handler(call, callback);
     } catch (err: any) {
@@ -292,12 +206,20 @@ async function getServiceEndpointPermissions(serviceName: string): Promise<{ [en
 }
 
 /**
- * Wrap service implementation with endpoint-level permission checks
+ * Apply API key authentication middleware to service based on database configuration
+ * Automatically fetches endpoint permissions from database and applies them
+ * 
+ * @param serviceImplementation - The gRPC service implementation
+ * @param serviceName - The service name (e.g., 'UserService', 'InfraService')
+ * @returns Service implementation wrapped with authentication middleware
  */
-export function requireServiceAuthEndpoint<T extends grpc.UntypedServiceImplementation>(
+export async function applyServiceAuthMiddleware<T extends grpc.UntypedServiceImplementation>(
   serviceImplementation: T,
-  endpointPermissions: { [endpoint: string]: string }
-): T {
+  serviceName: string
+): Promise<T> {
+  // Fetch endpoint permissions from database
+  const endpointPermissions = await getServiceEndpointPermissions(serviceName);
+  
   const wrapped: any = {};
 
   for (const methodName of Object.keys(serviceImplementation)) {
@@ -314,44 +236,4 @@ export function requireServiceAuthEndpoint<T extends grpc.UntypedServiceImplemen
   }
 
   return wrapped as T;
-}
-
-/**
- * Apply service auth middleware based on configuration
- * If serviceName is provided and no endpointPermissions are given,
- * permissions will be fetched from the database
- */
-export async function applyServiceAuthMiddleware<T extends grpc.UntypedServiceImplementation>(
-  serviceImplementation: T,
-  options?: {
-    level?: 'service' | 'endpoint';
-    requiredRole?: string;
-    endpointPermissions?: { [endpoint: string]: string };
-    serviceName?: string;
-  }
-): Promise<T> {
-  const level = options?.level || 'endpoint';
-
-  switch (level) {
-    case 'endpoint':
-      let endpointPermissions = options?.endpointPermissions;
-      
-      // If no permissions provided but serviceName is given, fetch from database
-      if (!endpointPermissions && options?.serviceName) {
-        endpointPermissions = await getServiceEndpointPermissions(options.serviceName);
-      }
-      
-      if (endpointPermissions) {
-        return requireServiceAuthEndpoint(serviceImplementation, endpointPermissions);
-      }
-      return serviceImplementation;
-    default:
-      let endpointPermissions = options?.serviceName;
-      endpointPermissions = await getServiceEndpointPermissions(options.serviceName);
-
-            if (endpointPermissions) {
-        return requireServiceAuthEndpoint(serviceImplementation, endpointPermissions);
-      }
-      return serviceImplementation;
-  }
 }

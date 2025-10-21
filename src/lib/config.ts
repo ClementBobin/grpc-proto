@@ -12,17 +12,7 @@ export interface ServerConfig {
   apiKeyExpirationDays: number;
 }
 
-export interface ServiceAuthConfig {
-  enabled: boolean;
-  allowedRoles?: string[];
-}
 
-export interface EndpointAuthConfig {
-  [endpoint: string]: {
-    enabled: boolean;
-    allowedRoles?: string[];
-  };
-}
 
 /**
  * Load server configuration from environment variables

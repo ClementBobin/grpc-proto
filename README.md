@@ -6,10 +6,9 @@ A TypeScript gRPC microservice with Prisma, Zod validation, and comprehensive te
 
 - **gRPC**: High-performance RPC framework using @grpc/grpc-js and @grpc/proto-loader
 - **HTTP/HTTPS Support**: Configurable to run with or without TLS
-- **RBAC (Role-Based Access Control)**: Flexible authentication at global, service, or endpoint level
-- **JWT Authentication**: Secure token-based authentication with role verification
-- **API Key Authentication**: Renewable API keys with automatic expiration and revocation support
-- **Service Authentication**: Database-driven service authentication with permission-based access control
+- **API Key Authentication**: Secure, renewable API keys with automatic expiration and revocation support
+- **Auto-Applied Middleware**: Authentication middleware automatically applied based on database configuration
+- **Permission-Based Access Control**: Fine-grained endpoint-level permissions stored in database
 - **Prisma ORM**: Database integration with SQLite
 - **Zod**: Schema validation for data integrity
 - **Jest**: Comprehensive testing framework
@@ -68,12 +67,10 @@ cp .env.example .env
 Key configuration options:
 
 - **USE_TLS**: Set to `true` for HTTPS/TLS, `false` for HTTP (default: false)
-- **ENABLE_AUTH**: Set to `false` to disable authentication (default: true)
-- **AUTH_LEVEL**: Choose `global`, `service`, or `endpoint` (default: endpoint)
-- **JWT_SECRET**: Secret key for JWT token signing (user authentication)
-- **SERVICE_JWT_SECRET**: Secret key for service JWT token signing (service authentication)
+- **API_KEY_EXPIRATION_DAYS**: Number of days until API keys expire (default: 30)
+- **DATABASE_URL**: Database connection URL
 
-See `.env.example` for all available options.
+**Note**: Authentication is now automatically applied based on database configuration. No need to manually configure auth levels or middleware.
 
 #### Environment Variables Reference
 
@@ -84,10 +81,6 @@ See `.env.example` for all available options.
 | `TLS_CERT_PATH` | `./server.crt` | Path to TLS certificate file |
 | `TLS_KEY_PATH` | `./server.key` | Path to TLS private key file |
 | `TLS_CA_PATH` | `./ca.crt` | Path to CA certificate (optional) |
-| `ENABLE_AUTH` | `true` | Enable authentication (`true`/`false`) |
-| `AUTH_LEVEL` | `endpoint` | Auth level (`global`/`service`/`endpoint`) |
-| `JWT_SECRET` | `super-secret` | Secret key for user JWT signing |
-| `SERVICE_JWT_SECRET` | `service-super-secret` | Secret key for service JWT signing |
 | `API_KEY_EXPIRATION_DAYS` | `30` | Days until API keys expire |
 | `DATABASE_URL` | `file:./dev.db` | Database connection URL |
 
@@ -282,21 +275,7 @@ client.getUser({ id: 'user-123' }, metadata, callback);
 - Automatic expiration (configurable, default 30 days)
 - Individual revocation support
 - Usage tracking (last used timestamp)
-- Backward compatible with JWT tokens
-
-### JWT Token Authentication (Legacy)
-
-1. **Generate a service token:**
-```bash
-npm run generate:service-token -- --service api-rest-service --role service-admin
-```
-
-2. **Use the token in gRPC calls:**
-```typescript
-const metadata = new grpc.Metadata();
-metadata.add('service-authorization', `Bearer ${serviceToken}`);
-client.getUser({ id: 'user-123' }, metadata, callback);
-```
+- Auto-applied based on database configuration
 
 ### Documentation
 
@@ -309,19 +288,19 @@ client.getUser({ id: 'user-123' }, metadata, callback);
 ### Features
 
 - **Database-driven permissions**: Services, roles, and permissions stored in database
-- **Dual authentication methods**: Support for both API keys and JWT tokens
+- **API key authentication**: Secure API key-based authentication
 - **API key expiration**: Automatic expiration with configurable periods
 - **Revocation support**: Individual API keys can be revoked
-- **JWT authentication**: Separate secret for service tokens (SERVICE_JWT_SECRET)
+- **Auto-applied middleware**: Authentication automatically applied based on database configuration
 - **Fine-grained access control**: Permission-based endpoint protection
-- **Comprehensive testing**: 24 service auth tests (69 total)
-- **Helper utilities**: Token generator, API key generator, and example client
+- **Comprehensive testing**: Complete test coverage with Prisma mock singleton
+- **Helper utilities**: API key generator script
 
 ### Environment Variables
 
 ```bash
-SERVICE_JWT_SECRET=service-super-secret  # Required for JWT service auth
-API_KEY_EXPIRATION_DAYS=30              # Days until API keys expire
+API_KEY_EXPIRATION_DAYS=30  # Days until API keys expire (default: 30)
+DATABASE_URL="file:./dev.db"  # Database connection URL
 ```
 
 ### Default Service
@@ -331,87 +310,62 @@ After running `npm run prisma:seed`:
 - Role: `service-admin`
 - Permissions: user:get, user:create, user:update, user:delete, user:list
 
-## Authentication & RBAC
+## Authentication & Permission-Based Access Control
 
-The server supports three levels of authentication configuration:
+The server uses **automatic API key authentication** based on database configuration. No manual middleware setup required!
 
-### 1. Global Authentication
+### How It Works
 
-All services and endpoints require authentication:
+1. **Database Configuration**: Endpoint permissions are stored in the database (`ServiceEndpoint` table)
+2. **Auto-Applied Middleware**: Authentication middleware is automatically applied when services are registered
+3. **Permission Checking**: Each endpoint checks if the service has the required permission
 
-```typescript
-// In server.ts
-const userServiceWithAuth = applyAuthMiddleware(userServiceImplementation, {
-  level: 'global',
-  globalRoles: ['admin', 'user'],
-});
-```
+### Configuring Endpoint Permissions
 
-Environment configuration:
-```bash
-AUTH_LEVEL=global
-ENABLE_AUTH=true
-```
-
-### 2. Service-Level Authentication
-
-Configure authentication per service:
+Permissions are configured in the database during seeding (see `prisma/seed.ts`):
 
 ```typescript
-const userServiceWithAuth = applyAuthMiddleware(userServiceImplementation, {
-  level: 'service',
-  serviceConfig: {
-    enabled: true,
-    allowedRoles: ['admin', 'user'],
+// Example: Configure permissions for UserService endpoints
+await prisma.serviceEndpoint.create({
+  data: {
+    serviceName: 'UserService',
+    endpointName: 'getUser',
+    permissionId: getUserPermission.id,
   },
 });
 ```
 
-Environment configuration:
-```bash
-AUTH_LEVEL=service
-ENABLE_AUTH=true
-```
+### Adding Services with Auto-Applied Auth
 
-### 3. Endpoint-Level Authentication (Default)
-
-Configure authentication per endpoint for fine-grained control:
+In `server.ts`, simply register your service. Auth middleware is applied automatically:
 
 ```typescript
-const userServiceWithAuth = applyAuthMiddleware(userServiceImplementation, {
-  level: 'endpoint',
-  endpointConfig: {
-    createUser: { enabled: true, allowedRoles: ['admin'] },
-    updateUser: { enabled: true, allowedRoles: ['admin', 'user'] },
-    deleteUser: { enabled: true, allowedRoles: ['admin'] },
-    getUser: { enabled: true, allowedRoles: ['admin', 'user'] },
-    listUsers: { enabled: true, allowedRoles: ['admin', 'user'] },
-  },
+// Infrastructure service - no auth needed
+await server.addService({
+  protoPath: 'infra.proto',
+  packageName: 'infra',
+  serviceName: 'InfraService',
+  implementation: infraServiceImplementation,
+  applyAuth: false, // Explicitly disable auth
+});
+
+// User service - auth auto-applied from DB config
+await server.addService({
+  protoPath: 'user.proto',
+  packageName: 'user',
+  serviceName: 'UserService',
+  implementation: userServiceImplementation,
+  // applyAuth defaults to true
 });
 ```
 
-Environment configuration:
-```bash
-AUTH_LEVEL=endpoint
-ENABLE_AUTH=true
-```
+### Making Authenticated Requests
 
-### Disabling Authentication
+Use API keys in the `service-authorization` header:
 
-To disable authentication entirely:
-
-```bash
-ENABLE_AUTH=false
-```
-
-### Using JWT Tokens
-
-To make authenticated requests, include a JWT token in the metadata:
-
-```javascript
+```typescript
 const metadata = new grpc.Metadata();
-const token = jwt.sign({ userId: '123', role: 'admin' }, JWT_SECRET);
-metadata.add('authorization', `Bearer ${token}`);
+metadata.add('service-authorization', `Bearer ${apiKey}`);
 
 // Make the gRPC call with metadata
 client.getUser({ id: '123' }, metadata, (err, response) => {
@@ -419,15 +373,12 @@ client.getUser({ id: '123' }, metadata, (err, response) => {
 });
 ```
 
-### Token Structure
+### Benefits
 
-JWT tokens should contain at minimum:
-- `userId`: User identifier
-- `role`: User role (e.g., 'admin', 'user', 'guest')
-
-The role is used for RBAC checks when `allowedRoles` is specified.
-
-For detailed examples and use cases, see [EXAMPLES.md](./EXAMPLES.md).
+- **No Manual Configuration**: Developers don't need to wrap handlers with middleware
+- **Database-Driven**: All permissions managed in the database
+- **Consistent**: Same authentication pattern across all services
+- **Testable**: Easy to test with Prisma mock singleton
 
 ## Development Guidelines
 
@@ -447,5 +398,6 @@ All new features should include:
 3. Create repository in `src/DAL/`
 4. Create service in `src/BL/`
 5. Create gRPC handlers in `src/grpc/`
-6. Register the service in `src/server.ts`
-7. Add tests in `Tests/`
+6. Register the service in `src/server.ts` (auth middleware auto-applied)
+7. Configure endpoint permissions in the database (via seed or migrations)
+8. Add tests in `Tests/` (use Prisma mock singleton from `__mocks__/`)
