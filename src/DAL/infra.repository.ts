@@ -1,36 +1,27 @@
-import prisma from '@/DAL/prismaClient';
+import { testDbConnection } from '@/DAL/prismaClient';
 
 export const InfraRepository = {
+  /**
+   * Checks overall system health — particularly database connectivity.
+   */
   getHealthStatus: async () => {
+    const timestamp = new Date().toISOString();
+
     try {
-      // Test database connection
-      await prisma.$connect();
-      
-      // Create a health check record
-      const healthCheck = await prisma.healthCheck.create({
-        data: {
-          status: 'healthy',
-        },
-      });
-      
+      await testDbConnection(3, 1500);
+
       return {
         status: 'healthy',
-        timestamp: healthCheck.timestamp.toISOString(),
+        timestamp,
         database: 'connected',
       };
     } catch (error) {
       return {
         status: 'unhealthy',
-        timestamp: new Date().toISOString(),
+        timestamp,
         database: 'disconnected',
         error: error instanceof Error ? error.message : 'Unknown error',
       };
-    } finally {
-      await prisma.$disconnect();
     }
-  },
-  
-  disconnect: async () => {
-    await prisma.$disconnect();
   },
 };

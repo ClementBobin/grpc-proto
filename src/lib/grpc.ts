@@ -3,6 +3,7 @@ import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
 import { createTLSCredentials } from './modules/tls.module';
 import { loadServerConfig } from './config';
+import { disconnectDb } from '@/DAL/prismaClient'
 
 export interface GrpcServiceDefinition {
   protoPath: string;
@@ -146,6 +147,7 @@ export class GrpcServer {
 function setupGracefulShutdown(server: GrpcServer): void {
   const shutdown = async (signal: string) => {
     console.log(`\nReceived ${signal}, shutting down gracefully...`);
+    await disconnectDb();
     await server.stop();
     process.exit(0);
   };
