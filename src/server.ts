@@ -1,6 +1,7 @@
 import { GrpcServer, setupGracefulShutdown } from '@/lib/grpc';
 import { infraServiceImplementation } from '@/grpc/infra.server';
 import { userServiceImplementation } from '@/grpc/user.server';
+import { authServiceImplementation } from '@/grpc/auth.server';
 import { testDbConnection } from '@/DAL/prismaClient';
 import logger from '@/lib/modules/logger.module';
 
@@ -26,6 +27,14 @@ async function main() {
       packageName: 'user',
       serviceName: 'UserService',
       implementation: userServiceImplementation,
+    });
+
+    // Add auth service (auth middleware will be automatically applied from DB config)
+    await server.addService({
+      protoPath: 'auth.proto',
+      packageName: 'auth',
+      serviceName: 'AuthService',
+      implementation: authServiceImplementation,
     });
 
     // Start the server
