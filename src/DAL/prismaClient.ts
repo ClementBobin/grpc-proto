@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import logger from '@/lib/modules/logger.module';
 
 // 🧱 Create the shared Prisma client instance
 const prisma = new PrismaClient({
@@ -15,16 +16,16 @@ export async function testDbConnection(retries = 3, delayMs = 2000): Promise<voi
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       await prisma.$connect();
-      console.log(`✅ Database connection successful (attempt ${attempt})`);
+      logger.info(`✅ Database connection successful (attempt ${attempt})`);
       return; // success → exit loop
     } catch (error) {
-      console.error(`❌ Database connection failed (attempt ${attempt} of ${retries}):`, error);
+      logger.logWithErrorHandling(`❌ Database connection failed (attempt ${attempt} of ${retries}):`, error);
 
       if (attempt < retries) {
-        console.log(`🔁 Retrying in ${delayMs / 1000}s...`);
+        logger.info(`🔁 Retrying in ${delayMs / 1000}s...`);
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       } else {
-        console.error('🚨 All reconnection attempts failed.');
+        logger.error('🚨 All reconnection attempts failed.');
         throw error; // Let caller handle critical failure
       }
     }
@@ -37,9 +38,9 @@ export async function testDbConnection(retries = 3, delayMs = 2000): Promise<voi
 export async function disconnectDb(): Promise<void> {
   try {
     await prisma.$disconnect();
-    console.log('🔌 Prisma disconnected cleanly.');
+    logger.info('🔌 Prisma disconnected cleanly.');
   } catch (error) {
-    console.error('⚠️ Failed to disconnect Prisma:', error);
+    logger.logWithErrorHandling('⚠️ Failed to disconnect Prisma:', error);
   }
 }
 
@@ -50,14 +51,14 @@ export async function disconnectDb(): Promise<void> {
  * This makes the service more resilient to transient DB outages or network hiccups.
  */
 prisma.$on('error', async (event) => {
-  console.error('⚠️ Prisma connection error detected:', event);
-  console.log('🔁 Attempting automatic reconnection...');
+  logger.logWithErrorHandling('⚠️ Prisma connection error detected:', event);
+  logger.info('🔁 Attempting automatic reconnection...');
 
   try {
     await testDbConnection(4, 15000); // 4 retries, 15s delay
-    console.log('✅ Automatic reconnection successful.');
+    logger.info('✅ Automatic reconnection successful.');
   } catch (error) {
-    console.error('❌ Automatic reconnection failed — manual intervention required:', error);
+    logger.logWithErrorHandling('❌ Automatic reconnection failed — manual intervention required:', error);
   }
 });
 

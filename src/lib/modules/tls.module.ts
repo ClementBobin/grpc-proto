@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as grpc from '@grpc/grpc-js';
+import logger from './logger.module';
 
 /**
  * Create SSL credentials for gRPC server
@@ -27,7 +28,7 @@ export function createTLSCredentials(
       true
     );
   } catch (error) {
-    console.error('Failed to load TLS credentials:', error);
+    logger.logWithErrorHandling('Failed to load TLS credentials:', error);
     throw new Error('TLS credentials could not be loaded. Ensure cert files exist and are readable.');
   }
 }

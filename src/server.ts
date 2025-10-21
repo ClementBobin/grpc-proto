@@ -1,7 +1,8 @@
 import { GrpcServer, setupGracefulShutdown } from '@/lib/grpc';
 import { infraServiceImplementation } from '@/grpc/infra.server';
 import { userServiceImplementation } from '@/grpc/user.server';
-import prisma, { testDbConnection } from '@/DAL/prismaClient';
+import { testDbConnection } from '@/DAL/prismaClient';
+import logger from '@/lib/modules/logger.module';
 
 const server = new GrpcServer();
 
@@ -35,14 +36,14 @@ async function main() {
       try {
         await testDbConnection(1);
       } catch {
-        console.error('💥 Prisma health check failed — reconnection will be handled automatically');
+        logger.error('💥 Prisma health check failed — reconnection will be handled automatically');
       }
     }, 5 * 60 * 1000);
 
     // Setup graceful shutdown
     setupGracefulShutdown(server);
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.logWithErrorHandling('Failed to start server:', error);
     process.exit(1);
   }
 }

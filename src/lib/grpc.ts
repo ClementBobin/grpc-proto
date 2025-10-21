@@ -3,14 +3,16 @@ import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
 import { createTLSCredentials } from './modules/tls.module';
 import { loadServerConfig } from './config';
-import { disconnectDb } from '@/DAL/prismaClient'
+import { disconnectDb } from '@/DAL/prismaClient';
+import { logContext } from './modules/logContext';
+import logger from './modules/logger.module';
 
 export interface GrpcServiceDefinition {
   protoPath: string;
   packageName: string;
   serviceName: string;
   implementation: grpc.UntypedServiceImplementation;
-  applyAuth?: boolean; // Optional flag to apply auth middleware (default: true)
+  applyAuth?: boolean;
 }
 
 /**
@@ -42,7 +44,7 @@ export class GrpcServer {
 
   /**
    * Add a gRPC service to the server
-   * Automatically applies API key authentication middleware based on database configuration
+   * Automatically applies authentication and logging wrappers.
    */
   async addService(serviceDefinition: GrpcServiceDefinition): Promise<void> {
     const protoPath = path.resolve(__dirname, '../../protos', serviceDefinition.protoPath);
@@ -60,7 +62,7 @@ export class GrpcServer {
     // Apply auth middleware automatically if not explicitly disabled
     let implementation = serviceDefinition.implementation;
     const applyAuth = serviceDefinition.applyAuth !== false; // Default to true
-    
+
     if (applyAuth) {
       const { applyServiceAuthMiddleware } = await import('./middleware/serviceAuth.middleware');
       try {
@@ -68,15 +70,64 @@ export class GrpcServer {
           serviceDefinition.implementation,
           serviceDefinition.serviceName
         );
-        console.log(`✓ Applied auth middleware to: ${serviceDefinition.serviceName}`);
+        logger.info(`✓ Applied auth middleware to: ${serviceDefinition.serviceName}`);
       } catch (error) {
-        console.warn(`⚠️  No auth configuration found for ${serviceDefinition.serviceName}, using original implementation`);
+        logger.warn(`⚠️  No auth configuration found for ${serviceDefinition.serviceName}, using original implementation`);
       }
     }
 
-    this.server.addService(serviceObj.service, implementation);
+    // ✅ Wrap all service methods with logging middleware
+    const wrappedImplementation = this.wrapWithLogging(implementation, serviceDefinition.serviceName);
+
+    this.server.addService(serviceObj.service, wrappedImplementation);
     this.services.push(serviceDefinition);
-    console.log(`✓ Added service: ${serviceDefinition.packageName}.${serviceDefinition.serviceName}`);
+    logger.info(`✓ Added service: ${serviceDefinition.packageName}.${serviceDefinition.serviceName}`);
+  }
+
+  /**
+   * Wrap each service method with start/end/error logging
+   */
+  private wrapWithLogging(
+    implementation: grpc.UntypedServiceImplementation,
+    serviceName: string
+  ): grpc.UntypedServiceImplementation {
+    const wrapped: grpc.UntypedServiceImplementation = {};
+
+    for (const [methodName, handler] of Object.entries(implementation)) {
+      wrapped[methodName] = async (call: any, callback: grpc.sendUnaryData<any>) => {
+        const fullMethodName = `${serviceName}.${methodName}`;
+        const callId = logger.grpcCallStart(call, fullMethodName);
+        const start = process.hrtime();
+
+        // ✅ Run everything inside AsyncLocalStorage context
+        logContext.run({ callId, methodName: fullMethodName }, async () => {
+          try {
+            const result = handler.length >= 2
+              ? await new Promise((resolve, reject) =>
+                  handler(call, (err: any, res: any) => (err ? reject(err) : resolve(res)))
+                )
+              : await new Promise((resolve, reject) =>
+                  handler(call, (err: any, res: any) => (err ? reject(err) : resolve(res)))
+                );
+
+            const end = process.hrtime(start);
+            const durationInMs = (end[0] * 1e9 + end[1]) / 1e6;
+            logger.grpcCallEnd(call, callId, { code: grpc.status.OK, details: 'OK' } as any, durationInMs);
+
+            if (callback) callback(null, result);
+          } catch (error: any) {
+            const end = process.hrtime(start);
+            const durationInMs = (end[0] * 1e9 + end[1]) / 1e6;
+
+            logger.logWithErrorHandling(`Error in ${fullMethodName}`, error);
+            logger.grpcCallEnd(call, callId, { code: grpc.status.INTERNAL, details: error.message } as any, durationInMs);
+            if (callback) callback(error, null);
+          }
+        });
+      };
+    }
+
+    return wrapped;
   }
 
   /**
@@ -96,26 +147,26 @@ export class GrpcServer {
             this.config.keyPath!,
             this.config.caPath
           );
-          console.log('🔒 TLS enabled');
+          logger.info('🔒 TLS enabled');
         } catch (error) {
-          console.warn('⚠️  Failed to load TLS credentials, falling back to insecure mode');
-          console.warn('   Error:', error instanceof Error ? error.message : error);
+          logger.warn('⚠️  Failed to load TLS credentials, falling back to insecure mode');
+          logger.warn('   Error:', error instanceof Error ? error.message : error);
           serverCreds = grpc.ServerCredentials.createInsecure();
         }
       } else {
         serverCreds = grpc.ServerCredentials.createInsecure();
-        console.log('🔓 Running in insecure mode (no TLS)');
+        logger.info('🔓 Running in insecure mode (no TLS)');
       }
 
       this.server.bindAsync(serverPort, serverCreds, (error, actualPort) => {
         if (error) return reject(error);
 
-        console.log(`\n🚀 gRPC Server started on ${actualPort}`);
-        console.log(`   Protocol: ${enableTLS ? 'gRPC with TLS' : 'gRPC insecure'}`);
-        console.log(`   Auth: API Key (automatically applied from DB configuration)`);
-        console.log('\n📋 Registered services:');
+        logger.info(`🚀 gRPC Server started on ${actualPort}`);
+        logger.info(`   Protocol: ${enableTLS ? 'gRPC with TLS' : 'gRPC insecure'}`);
+        logger.info(`   Auth: API Key (automatically applied from DB configuration)`);
+        logger.info('📋 Registered services:');
         this.services.forEach(service => {
-          console.log(`  - ${service.packageName}.${service.serviceName}`);
+          logger.info(`  - ${service.packageName}.${service.serviceName}`);
         });
         resolve();
       });
@@ -128,7 +179,7 @@ export class GrpcServer {
   async stop(): Promise<void> {
     return new Promise((resolve) => {
       this.server.tryShutdown(() => {
-        console.log('gRPC Server stopped');
+        logger.info('gRPC Server stopped');
         resolve();
       });
     });
@@ -139,14 +190,14 @@ export class GrpcServer {
    */
   forceShutdown(): void {
     this.server.forceShutdown();
-    console.log('gRPC Server force shutdown');
+    logger.info('gRPC Server force shutdown');
   }
 }
 
-// Handle graceful shutdown globally, outside the class
+// ==== Graceful Shutdown Helper ====
 function setupGracefulShutdown(server: GrpcServer): void {
   const shutdown = async (signal: string) => {
-    console.log(`\nReceived ${signal}, shutting down gracefully...`);
+    logger.info(`\nReceived ${signal}, shutting down gracefully...`);
     await disconnectDb();
     await server.stop();
     process.exit(0);
