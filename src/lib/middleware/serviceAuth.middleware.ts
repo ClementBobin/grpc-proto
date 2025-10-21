@@ -273,23 +273,6 @@ export function requireServiceAuthWithPermission<T, U>(
 }
 
 /**
- * Wrap entire service implementation with service auth
- */
-export function requireServiceAuthGlobal<T extends grpc.UntypedServiceImplementation>(
-  serviceImplementation: T,
-  requiredRole?: string
-): T {
-  const wrapped: any = {};
-
-  for (const methodName of Object.keys(serviceImplementation)) {
-    const originalHandler = (serviceImplementation as any)[methodName];
-    wrapped[methodName] = requireServiceAuth(originalHandler, requiredRole);
-  }
-
-  return wrapped as T;
-}
-
-/**
  * Fetch endpoint permissions from database for a service
  */
 async function getServiceEndpointPermissions(serviceName: string): Promise<{ [endpoint: string]: string }> {
@@ -341,7 +324,7 @@ export function requireServiceAuthEndpoint<T extends grpc.UntypedServiceImplemen
 export async function applyServiceAuthMiddleware<T extends grpc.UntypedServiceImplementation>(
   serviceImplementation: T,
   options?: {
-    level?: 'global' | 'endpoint';
+    level?: 'service' | 'endpoint';
     requiredRole?: string;
     endpointPermissions?: { [endpoint: string]: string };
     serviceName?: string;
@@ -350,8 +333,6 @@ export async function applyServiceAuthMiddleware<T extends grpc.UntypedServiceIm
   const level = options?.level || 'endpoint';
 
   switch (level) {
-    case 'global':
-      return requireServiceAuthGlobal(serviceImplementation, options?.requiredRole);
     case 'endpoint':
       let endpointPermissions = options?.endpointPermissions;
       
@@ -365,6 +346,12 @@ export async function applyServiceAuthMiddleware<T extends grpc.UntypedServiceIm
       }
       return serviceImplementation;
     default:
+      let endpointPermissions = options?.serviceName;
+      endpointPermissions = await getServiceEndpointPermissions(options.serviceName);
+
+            if (endpointPermissions) {
+        return requireServiceAuthEndpoint(serviceImplementation, endpointPermissions);
+      }
       return serviceImplementation;
   }
 }
