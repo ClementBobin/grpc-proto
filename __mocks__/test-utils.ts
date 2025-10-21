@@ -1,7 +1,7 @@
 import { Logger } from 'winston';
 
 export const mockLogger = (): Logger => {
-  const logger = jest.createMockFromModule<typeof import('../src/lib/docs/logger')>('../src/lib/docs/logger').default;
+  const logger = jest.createMockFromModule<typeof import('../src/lib/modules/logger.module')>('../src/lib/modules/logger.module').default;
 
   logger.info = jest.fn();
   logger.error = jest.fn();
