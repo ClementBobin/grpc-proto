@@ -5,6 +5,22 @@ import DailyRotateFile from 'winston-daily-rotate-file'; // Import DailyRotateFi
 
 import { loadServerConfig } from '../config';
 
+// Load server configuration
+const config = loadServerConfig();
+const {
+  nodeEnv,
+  dateFormat = 'YYYY-MM-DD HH:mm:ss',
+  unixFormat = false,
+  logLevel = 'info',
+  logFileEnabled = false,
+  logDirectory = './logs',
+  keepLogsFor = '90d',
+  storageDateFormat = 'YYYY-MM',
+} = config;
+
+// Additional config for keeping logs in production
+const keepLogsInProd: boolean = process.env.KEEP_LOGS_IN_PROD !== 'false'; // Default to true
+
 // Define custom colors for log levels
 const customColors = {
   trace: 'blue',
