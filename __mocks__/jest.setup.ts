@@ -1,9 +1,9 @@
 import { jest } from '@jest/globals';
-import { mockLogger } from './test-utils';
+import { mockLogsModule } from './test-utils';
 
-jest.mock('../src/lib/modules/logger', () => ({
+jest.mock('../src/lib/modules/logs.module', () => ({
   __esModule: true,
-  default: mockLogger(),
+  default: mockLogsModule(),
 }));
 
 beforeEach(async () => {
