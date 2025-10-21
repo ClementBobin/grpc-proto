@@ -1,0 +1,295 @@
+syntax = "proto3";
+
+package auth;
+
+service AuthService {
+  // Service operations - CREATE, GET, GETLIST, MODIFY
+  rpc CreateService (CreateServiceRequest) returns (CreateServiceResponse);
+  rpc GetService (GetServiceRequest) returns (GetServiceResponse);
+  rpc ListServices (ListServicesRequest) returns (ListServicesResponse);
+  rpc ModifyService (ModifyServiceRequest) returns (ModifyServiceResponse);
+  
+  // ServiceRole operations - CRUD
+  rpc CreateServiceRole (CreateServiceRoleRequest) returns (CreateServiceRoleResponse);
+  rpc GetServiceRole (GetServiceRoleRequest) returns (GetServiceRoleResponse);
+  rpc ListServiceRoles (ListServiceRolesRequest) returns (ListServiceRolesResponse);
+  rpc DeleteServiceRole (DeleteServiceRoleRequest) returns (DeleteServiceRoleResponse);
+  
+  // RolePermission operations - CRUD
+  rpc CreateRolePermission (CreateRolePermissionRequest) returns (CreateRolePermissionResponse);
+  rpc GetRolePermission (GetRolePermissionRequest) returns (GetRolePermissionResponse);
+  rpc ListRolePermissions (ListRolePermissionsRequest) returns (ListRolePermissionsResponse);
+  rpc DeleteRolePermission (DeleteRolePermissionRequest) returns (DeleteRolePermissionResponse);
+  
+  // ServiceEndpoint operations - CRUD
+  rpc CreateServiceEndpoint (CreateServiceEndpointRequest) returns (CreateServiceEndpointResponse);
+  rpc GetServiceEndpoint (GetServiceEndpointRequest) returns (GetServiceEndpointResponse);
+  rpc ListServiceEndpoints (ListServiceEndpointsRequest) returns (ListServiceEndpointsResponse);
+  rpc UpdateServiceEndpoint (UpdateServiceEndpointRequest) returns (UpdateServiceEndpointResponse);
+  rpc DeleteServiceEndpoint (DeleteServiceEndpointRequest) returns (DeleteServiceEndpointResponse);
+  
+  // ApiKey operations - create, revoke, reset expire date
+  rpc CreateApiKey (CreateApiKeyRequest) returns (CreateApiKeyResponse);
+  rpc RevokeApiKey (RevokeApiKeyRequest) returns (RevokeApiKeyResponse);
+  rpc ResetApiKeyExpiry (ResetApiKeyExpiryRequest) returns (ResetApiKeyExpiryResponse);
+  rpc GetApiKey (GetApiKeyRequest) returns (GetApiKeyResponse);
+  rpc ListApiKeys (ListApiKeysRequest) returns (ListApiKeysResponse);
+}
+
+// Service messages
+message Service {
+  string id = 1;
+  string name = 2;
+  string roleId = 3;
+  string createdAt = 4;
+  string updatedAt = 5;
+}
+
+message CreateServiceRequest {
+  string name = 1;
+  string roleId = 2;
+}
+
+message CreateServiceResponse {
+  Service service = 1;
+  string error = 2;
+}
+
+message GetServiceRequest {
+  string id = 1;
+}
+
+message GetServiceResponse {
+  Service service = 1;
+  string error = 2;
+}
+
+message ListServicesRequest {
+  int32 page = 1;
+  int32 pageSize = 2;
+}
+
+message ListServicesResponse {
+  repeated Service services = 1;
+  int32 total = 2;
+  string error = 3;
+}
+
+message ModifyServiceRequest {
+  string id = 1;
+  string name = 2;
+  string roleId = 3;
+}
+
+message ModifyServiceResponse {
+  Service service = 1;
+  string error = 2;
+}
+
+// ServiceRole messages
+message ServiceRole {
+  string serviceId = 1;
+  string roleId = 2;
+}
+
+message CreateServiceRoleRequest {
+  string serviceId = 1;
+  string roleId = 2;
+}
+
+message CreateServiceRoleResponse {
+  ServiceRole serviceRole = 1;
+  string error = 2;
+}
+
+message GetServiceRoleRequest {
+  string serviceId = 1;
+  string roleId = 2;
+}
+
+message GetServiceRoleResponse {
+  ServiceRole serviceRole = 1;
+  string error = 2;
+}
+
+message ListServiceRolesRequest {
+  string serviceId = 1;
+}
+
+message ListServiceRolesResponse {
+  repeated ServiceRole serviceRoles = 1;
+  string error = 2;
+}
+
+message DeleteServiceRoleRequest {
+  string serviceId = 1;
+  string roleId = 2;
+}
+
+message DeleteServiceRoleResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// RolePermission messages
+message RolePermission {
+  string roleId = 1;
+  string permissionId = 2;
+}
+
+message CreateRolePermissionRequest {
+  string roleId = 1;
+  string permissionId = 2;
+}
+
+message CreateRolePermissionResponse {
+  RolePermission rolePermission = 1;
+  string error = 2;
+}
+
+message GetRolePermissionRequest {
+  string roleId = 1;
+  string permissionId = 2;
+}
+
+message GetRolePermissionResponse {
+  RolePermission rolePermission = 1;
+  string error = 2;
+}
+
+message ListRolePermissionsRequest {
+  string roleId = 1;
+}
+
+message ListRolePermissionsResponse {
+  repeated RolePermission rolePermissions = 1;
+  string error = 2;
+}
+
+message DeleteRolePermissionRequest {
+  string roleId = 1;
+  string permissionId = 2;
+}
+
+message DeleteRolePermissionResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ServiceEndpoint messages
+message ServiceEndpoint {
+  string id = 1;
+  string serviceName = 2;
+  string endpointName = 3;
+  string permissionId = 4;
+  string createdAt = 5;
+  string updatedAt = 6;
+}
+
+message CreateServiceEndpointRequest {
+  string serviceName = 1;
+  string endpointName = 2;
+  string permissionId = 3;
+}
+
+message CreateServiceEndpointResponse {
+  ServiceEndpoint serviceEndpoint = 1;
+  string error = 2;
+}
+
+message GetServiceEndpointRequest {
+  string id = 1;
+}
+
+message GetServiceEndpointResponse {
+  ServiceEndpoint serviceEndpoint = 1;
+  string error = 2;
+}
+
+message ListServiceEndpointsRequest {
+  string serviceName = 1;
+}
+
+message ListServiceEndpointsResponse {
+  repeated ServiceEndpoint serviceEndpoints = 1;
+  string error = 2;
+}
+
+message UpdateServiceEndpointRequest {
+  string id = 1;
+  string serviceName = 2;
+  string endpointName = 3;
+  string permissionId = 4;
+}
+
+message UpdateServiceEndpointResponse {
+  ServiceEndpoint serviceEndpoint = 1;
+  string error = 2;
+}
+
+message DeleteServiceEndpointRequest {
+  string id = 1;
+}
+
+message DeleteServiceEndpointResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ApiKey messages
+message ApiKey {
+  string id = 1;
+  string key = 2;
+  string serviceId = 3;
+  string expiresAt = 4;
+  string createdAt = 5;
+  string lastUsedAt = 6;
+  bool isRevoked = 7;
+}
+
+message CreateApiKeyRequest {
+  string serviceId = 1;
+  string expiresAt = 2;
+}
+
+message CreateApiKeyResponse {
+  ApiKey apiKey = 1;
+  string error = 2;
+}
+
+message RevokeApiKeyRequest {
+  string id = 1;
+}
+
+message RevokeApiKeyResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message ResetApiKeyExpiryRequest {
+  string id = 1;
+  string expiresAt = 2;
+}
+
+message ResetApiKeyExpiryResponse {
+  ApiKey apiKey = 1;
+  string error = 2;
+}
+
+message GetApiKeyRequest {
+  string id = 1;
+}
+
+message GetApiKeyResponse {
+  ApiKey apiKey = 1;
+  string error = 2;
+}
+
+message ListApiKeysRequest {
+  string serviceId = 1;
+}
+
+message ListApiKeysResponse {
+  repeated ApiKey apiKeys = 1;
+  string error = 2;
+}

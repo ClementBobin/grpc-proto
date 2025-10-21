@@ -20,22 +20,27 @@ A TypeScript gRPC microservice with Prisma, Zod validation, and comprehensive te
 ```
 ├── proto/                    # Protocol Buffer definitions
 │   ├── infra.proto          # Infrastructure service
-│   └── user.proto           # User service
+│   ├── user.proto           # User service
+│   └── auth.proto           # Auth service (Service, Role, Permission, ApiKey management)
 ├── src/
 │   ├── server.ts            # Main gRPC server entry point
 │   ├── index.ts             # Legacy entry point (health check)
 │   ├── grpc/                # gRPC service implementations
 │   │   ├── infra.server.ts # Infrastructure gRPC handlers
-│   │   └── user.server.ts  # User gRPC handlers
+│   │   ├── user.server.ts  # User gRPC handlers
+│   │   └── auth.server.ts  # Auth gRPC handlers
 │   ├── BL/                  # Business Logic Layer
 │   │   ├── infra.service.ts
-│   │   └── user.service.ts
+│   │   ├── user.service.ts
+│   │   └── auth.service.ts
 │   ├── DTO/                 # Data Transfer Objects & Zod schemas
 │   │   ├── infra.dto.ts
-│   │   └── user.dto.ts
+│   │   ├── user.dto.ts
+│   │   └── auth.dto.ts
 │   ├── DAL/                 # Data Access Layer (Repositories)
 │   │   ├── infra.repository.ts
-│   │   └── user.repository.ts
+│   │   ├── user.repository.ts
+│   │   └── auth.repository.ts
 │   └── lib/                 # Shared libraries
 │       └── grpc.ts          # gRPC server helper
 ├── Tests/                   # Test files
@@ -191,6 +196,7 @@ Configuration:
 📋 Registered services:
   - infra.InfraService
   - user.UserService
+  - auth.AuthService
 ```
 
 ### Testing
@@ -249,6 +255,52 @@ rpc CreateUser (CreateUserRequest) returns (CreateUserResponse);
 rpc UpdateUser (UpdateUserRequest) returns (UpdateUserResponse);
 rpc DeleteUser (DeleteUserRequest) returns (DeleteUserResponse);
 rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);
+```
+
+### AuthService
+
+Comprehensive authentication and authorization management service with CRUD operations on grpc_auth database models:
+
+#### Service Operations (CREATE, GET, GETLIST, MODIFY)
+```protobuf
+rpc CreateService (CreateServiceRequest) returns (CreateServiceResponse);
+rpc GetService (GetServiceRequest) returns (GetServiceResponse);
+rpc ListServices (ListServicesRequest) returns (ListServicesResponse);
+rpc ModifyService (ModifyServiceRequest) returns (ModifyServiceResponse);
+```
+
+#### ServiceRole Operations (CRUD)
+```protobuf
+rpc CreateServiceRole (CreateServiceRoleRequest) returns (CreateServiceRoleResponse);
+rpc GetServiceRole (GetServiceRoleRequest) returns (GetServiceRoleResponse);
+rpc ListServiceRoles (ListServiceRolesRequest) returns (ListServiceRolesResponse);
+rpc DeleteServiceRole (DeleteServiceRoleRequest) returns (DeleteServiceRoleResponse);
+```
+
+#### RolePermission Operations (CRUD)
+```protobuf
+rpc CreateRolePermission (CreateRolePermissionRequest) returns (CreateRolePermissionResponse);
+rpc GetRolePermission (GetRolePermissionRequest) returns (GetRolePermissionResponse);
+rpc ListRolePermissions (ListRolePermissionsRequest) returns (ListRolePermissionsResponse);
+rpc DeleteRolePermission (DeleteRolePermissionRequest) returns (DeleteRolePermissionResponse);
+```
+
+#### ServiceEndpoint Operations (CRUD)
+```protobuf
+rpc CreateServiceEndpoint (CreateServiceEndpointRequest) returns (CreateServiceEndpointResponse);
+rpc GetServiceEndpoint (GetServiceEndpointRequest) returns (GetServiceEndpointResponse);
+rpc ListServiceEndpoints (ListServiceEndpointsRequest) returns (ListServiceEndpointsResponse);
+rpc UpdateServiceEndpoint (UpdateServiceEndpointRequest) returns (UpdateServiceEndpointResponse);
+rpc DeleteServiceEndpoint (DeleteServiceEndpointRequest) returns (DeleteServiceEndpointResponse);
+```
+
+#### ApiKey Operations (Create, Revoke, Reset Expire Date)
+```protobuf
+rpc CreateApiKey (CreateApiKeyRequest) returns (CreateApiKeyResponse);
+rpc RevokeApiKey (RevokeApiKeyRequest) returns (RevokeApiKeyResponse);
+rpc ResetApiKeyExpiry (ResetApiKeyExpiryRequest) returns (ResetApiKeyExpiryResponse);
+rpc GetApiKey (GetApiKeyRequest) returns (GetApiKeyResponse);
+rpc ListApiKeys (ListApiKeysRequest) returns (ListApiKeysResponse);
 ```
 
 ## Service Authentication
