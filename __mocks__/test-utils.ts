@@ -6,9 +6,10 @@ export const mockLogger = (): Logger => {
   logger.info = jest.fn();
   logger.error = jest.fn();
   logger.warn = jest.fn();
+  logger.debug = jest.fn();
   logger.logWithErrorHandling = jest.fn();
-  logger.routeStart = jest.fn().mockReturnValue('mock-request-id');
-  logger.routeEnd = jest.fn();
+  logger.grpcCallStart = jest.fn().mockReturnValue('mock-call-id');
+  logger.grpcCallEnd = jest.fn();
   logger.trackOperationTime = jest.fn(async (operation: Promise<any>) => await operation);
 
   return logger;

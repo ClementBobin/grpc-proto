@@ -1,8 +1,16 @@
 import { InfraRepository } from '@/DAL/infra.repository';
+import logger from '@/lib/modules/logger.module';
 
 export const InfraService = {
   healthCheck: async () => {
-    // Could do DB check, cache check, etc.
-    return InfraRepository.getHealthStatus();
+    logger.debug('[InfraService.healthCheck] Performing health check');
+    try {
+      const healthStatus = await InfraRepository.getHealthStatus();
+      logger.info(`[InfraService.healthCheck] Health check completed - status: ${healthStatus.status}`);
+      return healthStatus;
+    } catch (error) {
+      logger.logWithErrorHandling('[InfraService.healthCheck] Error performing health check', error);
+      throw error;
+    }
   }
 };
