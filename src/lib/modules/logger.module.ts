@@ -3,7 +3,7 @@ import winston from 'winston'; // Import winston for logging
 import { v4 as uuidv4 } from 'uuid'; // Import uuid for generating unique IDs
 import DailyRotateFile from 'winston-daily-rotate-file'; // Import DailyRotateFile for log rotation
 
-import { dateFormat, unixFormat, logLevel, logFileEnabled, logDirectory, keepLogsInProd, keepLogsFor, storageDateFormat, nodeEnv } from '../config';
+import { loadServerConfig } from '../config';
 
 // Define custom colors for log levels
 const customColors = {
