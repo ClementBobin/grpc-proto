@@ -7,14 +7,16 @@ const server = new GrpcServer();
 async function main() {
   try {
     // Add infrastructure service (no auth required for health checks)
-    server.addService({
+    await server.addService({
       protoPath: 'infra.proto',
       packageName: 'infra',
       serviceName: 'InfraService',
       implementation: infraServiceImplementation,
+      applyAuth: false, // Health checks don't need authentication
     });
 
-    server.addService({
+    // Add user service (auth middleware will be automatically applied from DB config)
+    await server.addService({
       protoPath: 'user.proto',
       packageName: 'user',
       serviceName: 'UserService',
