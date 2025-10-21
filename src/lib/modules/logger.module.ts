@@ -3,8 +3,8 @@ import winston from 'winston';
 import { v4 as uuidv4 } from 'uuid';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import { loadServerConfig } from '../config';
-import { StatusObject } from '@grpc/grpc-js';
-import { getCallId, getMethodName } from './logContext';
+import type { StatusObject } from '@grpc/grpc-js';
+import { getCallId, getMethodName } from '../logContext';
 
 // ==== Custom Colors and Levels ====
 const customColors = {
@@ -86,7 +86,7 @@ declare module 'winston' {
     logWithErrorHandling(msg: any, error: any, hasSecret?: boolean, level?: string): void;
     trackOperationTime<T>(operation: Promise<T>, operationName: string): Promise<T>;
     grpcCallStart(call: any, methodName: string): string;
-    grpcCallEnd(call: any, id: string, status: StatusObject, durationInMs: number): void;
+    grpcCallEnd(status: StatusObject, durationInMs: number): void;
   }
 }
 
@@ -107,12 +107,12 @@ logger.grpcCallStart = function (call: any, methodName: string): string {
 };
 
 // Logs the end of a gRPC call with duration and status
-logger.grpcCallEnd = function (call: any, id: string, status: StatusObject, durationInMs: number): void {
+logger.grpcCallEnd = function (status: StatusObject, durationInMs: number): void {
   const code = status.code;
   const details = status.details || 'OK';
   const trailers = (status.metadata && status.metadata.getMap) ? status.metadata.getMap() : {};
 
-  logger.info(`✅ gRPC CALL END - Call ID: ${id}, Status: ${code} (${details}), Duration: ${durationInMs}ms, Trailers: ${JSON.stringify(trailers)}`);
+  logger.info(`✅ gRPC CALL END, Status: ${code} (${details}), Duration: ${durationInMs}ms, Trailers: ${JSON.stringify(trailers)}`);
 };
 
 // ==== Error Handler ====

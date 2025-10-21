@@ -4,7 +4,7 @@ import path from 'path';
 import { createTLSCredentials } from './modules/tls.module';
 import { loadServerConfig } from './config';
 import { disconnectDb } from '@/DAL/prismaClient';
-import { logContext } from './modules/logContext';
+import { logContext } from './logContext';
 import logger from './modules/logger.module';
 
 export interface GrpcServiceDefinition {
@@ -112,7 +112,7 @@ export class GrpcServer {
 
             const end = process.hrtime(start);
             const durationInMs = (end[0] * 1e9 + end[1]) / 1e6;
-            logger.grpcCallEnd(call, callId, { code: grpc.status.OK, details: 'OK' } as any, durationInMs);
+            logger.grpcCallEnd({ code: grpc.status.OK, details: 'OK' } as any, durationInMs);
 
             if (callback) callback(null, result);
           } catch (error: any) {
@@ -120,7 +120,7 @@ export class GrpcServer {
             const durationInMs = (end[0] * 1e9 + end[1]) / 1e6;
 
             logger.logWithErrorHandling(`Error in ${fullMethodName}`, error);
-            logger.grpcCallEnd(call, callId, { code: grpc.status.INTERNAL, details: error.message } as any, durationInMs);
+            logger.grpcCallEnd({ code: grpc.status.INTERNAL, details: error.message } as any, durationInMs);
             if (callback) callback(error, null);
           }
         });
