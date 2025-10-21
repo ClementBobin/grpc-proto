@@ -186,8 +186,6 @@ export function requireServiceAuthWithPermission<T, U>(
   };
 }
 
-
-
 /**
  * Fetch endpoint permissions from database for a service
  */
