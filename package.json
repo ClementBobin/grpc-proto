@@ -21,7 +21,6 @@
     "prisma:seed": "prisma db seed",
     "postinstall": "prisma generate",
     "db:deploy": "npx prisma migrate deploy && npx prisma generate",
-    "generate:service-token": "ts-node -r tsconfig-paths/register scripts/generate-service-token.ts",
     "generate:api-key": "ts-node -r tsconfig-paths/register scripts/generate-api-key.ts"
   },
   "keywords": [],
@@ -47,8 +46,6 @@
     "@grpc/grpc-js": "^1.14.0",
     "@grpc/proto-loader": "^0.8.0",
     "@prisma/client": "^6.17.1",
-    "@types/jsonwebtoken": "^9.0.10",
-    "jsonwebtoken": "^9.0.2",
     "zod": "^4.1.12"
   }
 }

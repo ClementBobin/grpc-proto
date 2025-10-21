@@ -26,3 +26,10 @@ export function decryptField(enc: string): string {
   decipher.setAuthTag(tag);
   return decipher.update(encrypted) + decipher.final('utf8');
 }
+
+/**
+ * Generate a secure API key
+ */
+export function generateApiKey(): string {
+  return crypto.randomBytes(32).toString('hex');
+}

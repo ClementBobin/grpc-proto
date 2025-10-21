@@ -1,5 +1,5 @@
 import type { User, CreateUserInput, UpdateUserInput } from '@/DTO/user.dto';
-import prisma from './prismaClient';
+import prisma from '@/DAL/prismaClient';
 
 export const UserRepository = {
   findById: async (id: string): Promise<User | null> => {

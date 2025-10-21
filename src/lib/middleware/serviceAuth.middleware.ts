@@ -1,23 +1,9 @@
 import * as grpc from '@grpc/grpc-js';
-import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/DAL/prismaClient';
 import { loadServerConfig } from '../config';
-import crypto from 'crypto';
+import { generateApiKey } from '../encrypt';
 
 const config = loadServerConfig();
-const SERVICE_JWT_SECRET = config.serviceJwtSecret;
-const prisma = new PrismaClient();
-
-/**
- * Service JWT payload interface
- */
-export interface ServiceJwtPayload {
-  sub: string; // service ID
-  aud: string; // audience (should be 'grpc_auth')
-  role: string; // service role (e.g., 'service-admin')
-  iat?: number;
-  exp?: number;
-}
 
 /**
  * API Key payload interface
@@ -35,13 +21,6 @@ export interface ServiceInfo {
   serviceName: string;
   role: string;
   permissions: string[];
-}
-
-/**
- * Generate a secure API key
- */
-export function generateApiKey(): string {
-  return crypto.randomBytes(32).toString('hex');
 }
 
 /**
@@ -120,28 +99,9 @@ async function verifyApiKey(key: string): Promise<ApiKeyPayload> {
  * Verify service token (supports both JWT and API key)
  */
 async function verifyServiceToken(token: string): Promise<{ serviceName: string; isApiKey: boolean }> {
-  // Check if it's an API key (64 hex characters) or JWT
-  const apiKeyPattern = /^[a-f0-9]{64}$/i;
-  
-  if (apiKeyPattern.test(token)) {
-    // It's an API key
-    const payload = await verifyApiKey(token);
-    return { serviceName: payload.serviceName, isApiKey: true };
-  } else {
-    // It's a JWT token
-    try {
-      const payload = jwt.verify(token, SERVICE_JWT_SECRET) as ServiceJwtPayload;
-      
-      // Verify audience
-      if (payload.aud !== 'grpc_auth') {
-        throw new Error('Invalid audience');
-      }
-      
-      return { serviceName: payload.sub, isApiKey: false };
-    } catch (err) {
-      throw { code: grpc.status.UNAUTHENTICATED, message: 'Invalid service token' };
-    }
-  }
+  // It's an API key
+  const payload = await verifyApiKey(token);
+  return { serviceName: payload.serviceName, isApiKey: true };
 }
 
 /**
